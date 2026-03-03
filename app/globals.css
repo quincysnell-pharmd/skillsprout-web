@@ -1,0 +1,236 @@
+@import "tailwindcss";
+
+/* ── GLOBAL BASELINE ─────────────────────────────────────────── */
+:root {
+  color-scheme: light;
+  --green-dark:  #1a6b3c;
+  --green:       #2d9b5a;
+  --green-mid:   #3dbf70;
+  --green-light: #c8f0d8;
+  --green-bg:    #f0faf4;
+  --gold:        #f5a623;
+  --gold-light:  #fff3d4;
+  --gold-dark:   #d4850a;
+  --shadow-sm:   0 2px 8px rgba(0,0,0,.07);
+  --shadow:      0 4px 20px rgba(0,0,0,.10);
+  --shadow-lg:   0 8px 40px rgba(0,0,0,.14);
+}
+
+html {
+  font-family: var(--font-body), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  background: var(--green-bg);
+}
+
+* { -webkit-tap-highlight-color: transparent; }
+
+/* ── FONTS ───────────────────────────────────────────────────── */
+.font-display {
+  font-family: var(--font-display), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+/* ── HERO ────────────────────────────────────────────────────── */
+.ss-hero {
+  background: linear-gradient(135deg, #e8f8ee 0%, #fff9e6 100%);
+  border-bottom: 2px solid var(--green-light);
+  padding: 72px 32px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── STATS BAR ───────────────────────────────────────────────── */
+.ss-stats-bar {
+  background: var(--green-dark);
+  padding: 22px 32px;
+}
+
+/* ── MAIN SECTION WRAPPER ────────────────────────────────────── */
+.ss-section {
+  padding: 56px 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ── CHALLENGE BANNER ────────────────────────────────────────── */
+.ss-challenge-banner {
+  background: linear-gradient(135deg, var(--green-dark), #1a4d2e);
+  border-radius: 32px;
+  padding: 32px 38px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+/* ── BUTTONS ─────────────────────────────────────────────────── */
+.ss-btn-primary {
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 26px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  font-family: inherit;
+}
+.ss-btn-primary:hover {
+  background: var(--green-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(45,155,90,.3);
+}
+
+.ss-btn-gold {
+  background: var(--gold);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 26px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  font-family: inherit;
+}
+.ss-btn-gold:hover {
+  background: var(--gold-dark);
+  transform: translateY(-2px);
+}
+
+.ss-btn-secondary {
+  background: #fff;
+  color: var(--green-dark);
+  border: 2px solid var(--green-mid);
+  border-radius: 12px;
+  padding: 11px 26px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: inherit;
+}
+.ss-btn-secondary:hover {
+  background: var(--green-light);
+  transform: translateY(-2px);
+}
+
+/* ── FEATURE CARDS ───────────────────────────────────────────── */
+.ss-feature-card {
+  background: #fff;
+  border-radius: 24px;
+  padding: 26px;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: all 0.25s;
+  border: 2px solid transparent;
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+}
+.ss-feature-card:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--green-light);
+}
+
+/* ── GENERAL CARD ────────────────────────────────────────────── */
+.ss-card {
+  background: #fff;
+  border-radius: 24px;
+  padding: 26px;
+  box-shadow: var(--shadow);
+  border: 2px solid transparent;
+  transition: all 0.25s;
+}
+.ss-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--green-light);
+}
+
+/* ── INTEREST CARDS ──────────────────────────────────────────── */
+.ss-interest-card {
+  background: #fff;
+  border-radius: 24px;
+  padding: 26px 18px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s;
+  box-shadow: var(--shadow);
+  border: 3px solid transparent;
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.ss-interest-card:hover {
+  transform: translateY(-6px);
+  border-color: var(--green-mid);
+}
+
+/* ── PROGRESS BAR ────────────────────────────────────────────── */
+.ss-progress-track {
+  height: 12px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.ss-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #3dbf70, #2d9b5a);
+  transition: width 0.5s ease;
+}
+
+/* ── BADGE CARDS ─────────────────────────────────────────────── */
+.ss-badge-earned {
+  background: #fff9e6;
+  border: 2px solid var(--gold);
+  border-radius: 20px;
+  padding: 20px;
+  transition: all 0.2s;
+}
+.ss-badge-earned:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+}
+.ss-badge-locked {
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 20px;
+  opacity: 0.5;
+}
+
+/* ── LEVEL PILLS ─────────────────────────────────────────────── */
+.ss-pill-seedling { background: #e8f8ee; color: var(--green-dark); border: 1.5px solid var(--green-light); border-radius: 8px; padding: 3px 10px; font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 4px; }
+.ss-pill-sprout   { background: #d1fae5; color: #15803d;            border: 1.5px solid #86efac;            border-radius: 8px; padding: 3px 10px; font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 4px; }
+.ss-pill-bloom    { background: #e0f2fe; color: #0369a1;            border: 1.5px solid #7dd3fc;            border-radius: 8px; padding: 3px 10px; font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 4px; }
+.ss-pill-harvest  { background: #fef9c3; color: #a16207;            border: 1.5px solid #fde047;            border-radius: 8px; padding: 3px 10px; font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 4px; }
+
+/* ── ANIMATIONS ──────────────────────────────────────────────── */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-12px); }
+}
+.ss-float { animation: float 3s ease-in-out infinite; }
