@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "../lib/supabase/client";
 import { generateCode, formatCode, cleanCode } from "@/app/lib/linkCodes";
@@ -28,7 +28,7 @@ function BackButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-export default function AuthPage() {
+function AuthPageInner() {
   const router   = useRouter();
   const params   = useSearchParams();
   const nextPath = params.get("next") || "/dashboard/parent";
@@ -423,5 +423,12 @@ export default function AuthPage() {
         </p>
       </div>
     </div>
+  );
+}
+export default function AuthPage() {
+  return (
+    <Suspense fallback={<div />}>
+      <AuthPageInner />
+    </Suspense>
   );
 }
