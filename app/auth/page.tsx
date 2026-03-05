@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "../lib/supabase/client";
 import { generateCode, formatCode, cleanCode } from "@/app/lib/linkCodes";
@@ -50,6 +50,9 @@ function AuthPageInner() {
   const [kidEmail, setKidEmail]           = useState("");
   const [inviteCode, setInviteCode]       = useState("");
   const [hasInviteCode, setHasInviteCode] = useState<boolean | null>(null);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const usernameCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Kid login
   const [loginUsername, setLoginUsername] = useState("");
@@ -299,8 +302,32 @@ function AuthPageInner() {
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-bold text-slate-700">Username</label>
-                <input value={kidUsername} onChange={(e) => setKidUsername(e.target.value)} placeholder="e.g. SuperSprout42" maxLength={20}
-                  className="mt-1.5 w-full rounded-2xl border border-lime-200 bg-white px-4 py-3 text-base outline-none focus:border-lime-400 focus:ring-4 focus:ring-lime-100 transition" />
+                <input value={kidUsername} onChange={(e) => {
+                  const val = e.target.value;
+                  setKidUsername(val);
+                  setUsernameAvailable(null);
+                  if (usernameCheckTimer.current) clearTimeout(usernameCheckTimer.current);
+                  if (val.trim().length < 3) return;
+                  setCheckingUsername(true);
+                  usernameCheckTimer.current = setTimeout(async () => {
+                    const { data, error } = await supabase
+                      .from("child_profiles")
+                      .select("id")
+                      .ilike("username", val.trim())
+                      .limit(1);
+                    console.log("Username check:", val, "data:", data, "error:", error);
+                    setUsernameAvailable(!data || data.length === 0);
+                    setCheckingUsername(false);
+                  }, 500);
+                }} placeholder="e.g. SuperSprout42" maxLength={20}
+                  className={`mt-1.5 w-full rounded-2xl border bg-white px-4 py-3 text-base outline-none focus:ring-4 transition ${
+                    usernameAvailable === true ? "border-emerald-400 focus:border-emerald-400 focus:ring-emerald-100"
+                    : usernameAvailable === false ? "border-rose-400 focus:border-rose-400 focus:ring-rose-100"
+                    : "border-lime-200 focus:border-lime-400 focus:ring-lime-100"
+                  }`} />
+                {checkingUsername && <p className="mt-1 text-xs font-semibold text-slate-400">Checking…</p>}
+                {usernameAvailable === true && <p className="mt-1 text-xs font-bold text-emerald-600">✓ That username is available!</p>}
+                {usernameAvailable === false && <p className="mt-1 text-xs font-bold text-rose-600">✗ That username is taken — try another one!</p>}
               </div>
               <div>
                 <label className="text-sm font-bold text-slate-700">4-Digit PIN</label>
