@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
 import { formatCode, cleanCode, generateCode } from "@/app/lib/linkCodes";
+import ParentPostApprovals from "@/components/community/ParentPostApprovals";
 
 // ── Types ─────────────────────────────────────────────────────
 interface ChildProfile {
@@ -106,6 +107,7 @@ export default function ParentDashboard() {
   const [msg, setMsg]                     = useState<{ text: string; ok: boolean } | null>(null);
   const [childCode, setChildCode]         = useState("");
   const [showCodeInput, setShowCodeInput] = useState(false);
+  const [activeTab, setActiveTab] = useState<"dashboard" | "posts">("dashboard");
 
   useEffect(() => { loadData(); }, []);
 
@@ -226,6 +228,22 @@ export default function ParentDashboard() {
         <span className="text-4xl">👨‍👩‍👧</span>
       </div>
 
+{/* Tabs */}
+      <div className="flex gap-1 rounded-2xl bg-slate-100 p-1">
+        <button onClick={() => setActiveTab("dashboard")}
+          className={`flex-1 rounded-xl py-2 text-sm font-bold transition-all ${activeTab === "dashboard" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+          🏠 Dashboard
+        </button>
+        <button onClick={() => setActiveTab("posts")}
+          className={`flex-1 rounded-xl py-2 text-sm font-bold transition-all ${activeTab === "posts" ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+          📝 Post Approvals
+        </button>
+      </div>
+
+      {activeTab === "posts" && <ParentPostApprovals />}
+
+      {activeTab === "dashboard" && <>
+
       {msg && (
         <div className={`rounded-2xl border p-4 text-sm font-semibold ${msg.ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
           {msg.text}
@@ -326,6 +344,8 @@ export default function ParentDashboard() {
       >
         Sign Out
       </button>
+
+      </>}
     </div>
   );
 }
