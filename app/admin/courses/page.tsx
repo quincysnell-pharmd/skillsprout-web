@@ -17,24 +17,33 @@ interface Course {
 
 const BLANK: Omit<Course, "id"> = {
   title: "", slug: "", description: "", category: "cooking",
-  level: "seedling", duration_minutes: 30, is_published: false,
+  level: "seed", duration_minutes: 60, is_published: false,
 };
 
 const CATEGORIES = ["cooking","coding","gardening","money","art","science","music","writing"];
-const LEVELS = ["seedling","sprout","bloom","harvest"];
+
+const LEVELS = [
+  { value: "seed",      label: "1 — Seed"      },
+  { value: "sprout",    label: "2 — Sprout"    },
+  { value: "sapling",   label: "3 — Sapling"   },
+  { value: "tree",      label: "4 — Tree"      },
+  { value: "forest",    label: "5 — Forest"    },
+  { value: "ecosystem", label: "6 — Ecosystem" },
+];
 
 const LEVEL_ORDER: Record<string, number> = {
-  seedling: 1, sprout: 2, bloom: 3, harvest: 4,
+  seed: 1, sprout: 2, sapling: 3, tree: 4, forest: 5, ecosystem: 6,
 };
 
 export default function AdminCourses() {
   const supabase = supabaseBrowser();
-  const [rows, setRows]     = useState<Course[]>([]);
+  const [rows, setRows]       = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal]   = useState(false);
+  const [modal, setModal]     = useState(false);
   const [editing, setEditing] = useState<Course | null>(null);
-  const [form, setForm]     = useState<Omit<Course, "id">>(BLANK);
-  const [busy, setBusy]     = useState(false);
+  const [form, setForm]       = useState<Omit<Course, "id">>(BLANK);
+  const [busy, setBusy]       = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -45,8 +54,8 @@ export default function AdminCourses() {
     setLoading(false);
   }
 
-  function openAdd() { setEditing(null); setForm(BLANK); setModal(true); }
-  function openEdit(row: Course) { setEditing(row); setForm({ ...row }); setModal(true); }
+  function openAdd() { setEditing(null); setForm(BLANK); setModal(true); setSaveError(null); }
+  function openEdit(row: Course) { setEditing(row); setForm({ ...row }); setModal(true); setSaveError(null); }
 
   function set(key: keyof Omit<Course,"id">, val: unknown) {
     setForm((f) => ({ ...f, [key]: val }));
@@ -55,13 +64,17 @@ export default function AdminCourses() {
   async function save() {
     if (!form.title.trim()) return;
     setBusy(true);
+    setSaveError(null);
+
     if (editing) {
-      await supabase.from("courses").update(form).eq("id", editing.id);
+      const { error } = await supabase.from("courses").update(form).eq("id", editing.id);
+      if (error) { setSaveError(error.message); setBusy(false); return; }
     } else {
-      // Auto-generate slug from title if blank
       const slug = form.slug.trim() || form.title.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-      await supabase.from("courses").insert({ ...form, slug });
+      const { error } = await supabase.from("courses").insert({ ...form, slug });
+      if (error) { setSaveError(error.message); setBusy(false); return; }
     }
+
     await load();
     setModal(false);
     setBusy(false);
@@ -70,6 +83,14 @@ export default function AdminCourses() {
   async function del(id: string) {
     await supabase.from("courses").delete().eq("id", id);
     setRows((r) => r.filter((x) => x.id !== id));
+  }
+
+  // Convert minutes to hours for display
+  function formatDuration(minutes: number) {
+    if (minutes < 60) return `${minutes}m`;
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
   }
 
   return (
@@ -83,9 +104,9 @@ export default function AdminCourses() {
           { key: "title", label: "Title" },
           { key: "category", label: "Category", render: (r) => <span className="capitalize">{r.category}</span> },
           { key: "level", label: "Level", render: (r) => (
-           <span className="capitalize whitespace-nowrap">{LEVEL_ORDER[r.level] ?? "?"}. {r.level}</span>
+            <span className="capitalize whitespace-nowrap">{LEVEL_ORDER[r.level] ?? "?"}. {r.level}</span>
           )},
-          { key: "duration_minutes", label: "Duration", render: (r) => `${r.duration_minutes} min` },
+          { key: "duration_minutes", label: "Duration", render: (r) => formatDuration(r.duration_minutes) },
           {
             key: "is_published", label: "Status",
             render: (r) => (
@@ -100,8 +121,8 @@ export default function AdminCourses() {
             key: "id", label: "Lessons",
             render: (r) => (
               <a href={`/admin/courses/${r.id}/lessons`}
-                 className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700 hover:bg-violet-100 transition whitespace-nowrap">
-                 Manage →
+                className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700 hover:bg-violet-100 transition whitespace-nowrap">
+                Manage →
               </a>
             ),
           },
@@ -132,12 +153,24 @@ export default function AdminCourses() {
             </Field>
             <Field label="Level">
               <select className={selectCls} value={form.level} onChange={(e) => set("level", e.target.value)}>
-                {LEVELS.map((l) => <option key={l} value={l} className="capitalize">{l}</option>)}
+                {LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
             </Field>
           </div>
-          <Field label="Duration (minutes)">
-            <input className={inputCls} type="number" min={1} value={form.duration_minutes} onChange={(e) => set("duration_minutes", Number(e.target.value))} />
+          <Field label="Duration (hours)">
+            <div className="flex items-center gap-3">
+              <input
+                className={inputCls}
+                type="number"
+                min={0.5}
+                step={0.5}
+                value={(form.duration_minutes / 60).toFixed(1)}
+                onChange={(e) => set("duration_minutes", Math.round(Number(e.target.value) * 60))}
+              />
+              <span className="text-sm font-semibold text-slate-500 whitespace-nowrap">
+                = {form.duration_minutes} min
+              </span>
+            </div>
           </Field>
           <Field label="Status">
             <label className="flex items-center gap-2 cursor-pointer">
@@ -150,6 +183,11 @@ export default function AdminCourses() {
               <span className="text-sm font-semibold text-slate-700">Published (visible to kids)</span>
             </label>
           </Field>
+          {saveError && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+              ❌ {saveError}
+            </div>
+          )}
         </CMSModal>
       )}
     </>
