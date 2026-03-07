@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
 
 // ── TYPES ─────────────────────────────────────────────────────
-type Level    = "seedling" | "sprout" | "bloom" | "harvest";
+type Level    = "seedling" | "sprout" | "bloom" | "harvest" | string;
 type Category = "all" | "cooking" | "coding" | "gardening" | "money" | "art";
 
 type Course = {
@@ -83,12 +83,20 @@ const FALLBACK_COURSES: Course[] = [
 ];
 
 // ── LEVEL CONFIG ──────────────────────────────────────────────
-const LEVEL_CONFIG: Record<Level, { label: string; emoji: string; color: string; bg: string; description: string }> = {
+const LEVEL_CONFIG: Record<string, { label: string; emoji: string; color: string; bg: string; description: string }> = {
   seedling: { label: "Seedling", emoji: "🌱", color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", description: "Complete beginner" },
   sprout:   { label: "Sprout",   emoji: "🌿", color: "text-green-700",   bg: "bg-green-50 border-green-200",     description: "Some experience" },
   bloom:    { label: "Bloom",    emoji: "🌸", color: "text-sky-700",     bg: "bg-sky-50 border-sky-200",         description: "Getting confident" },
   harvest:  { label: "Harvest",  emoji: "🌻", color: "text-amber-700",   bg: "bg-amber-50 border-amber-200",     description: "Advanced learner" },
+  // Admin level names
+  seed:      { label: "Seed",      emoji: "🌱", color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", description: "Complete beginner" },
+  sapling:   { label: "Sapling",   emoji: "🌿", color: "text-green-700",   bg: "bg-green-50 border-green-200",     description: "Some experience" },
+  tree:      { label: "Tree",      emoji: "🌳", color: "text-sky-700",     bg: "bg-sky-50 border-sky-200",         description: "Getting confident" },
+  forest:    { label: "Forest",    emoji: "🌲", color: "text-teal-700",    bg: "bg-teal-50 border-teal-200",       description: "Advanced learner" },
+  ecosystem: { label: "Ecosystem", emoji: "🌻", color: "text-amber-700",   bg: "bg-amber-50 border-amber-200",     description: "Expert" },
 };
+
+const FALLBACK_LEVEL = { label: "Beginner", emoji: "📚", color: "text-slate-700", bg: "bg-slate-50 border-slate-200", description: "" };
 
 const CATEGORY_FILTERS: { key: Category; label: string }[] = [
   { key: "all",       label: "All Courses" },
@@ -101,7 +109,7 @@ const CATEGORY_FILTERS: { key: Category; label: string }[] = [
 
 // ── SUB-COMPONENTS ────────────────────────────────────────────
 function LevelPill({ level }: { level: Level }) {
-  const cfg = LEVEL_CONFIG[level];
+  const cfg = LEVEL_CONFIG[level] ?? FALLBACK_LEVEL;
   return (
     <span className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-bold ${cfg.bg} ${cfg.color}`}>
       {cfg.emoji} {cfg.label}
@@ -138,7 +146,7 @@ function CourseCard({ course, enrolled, onClick }: { course: Course; enrolled: b
 }
 
 function CourseDetail({ course, enrolled, onEnroll, onBack }: { course: Course; enrolled: boolean; onEnroll: () => void; onBack: () => void }) {
-  const cfg = LEVEL_CONFIG[course.level];
+  const cfg = LEVEL_CONFIG[course.level] ?? FALLBACK_LEVEL;
   return (
     <div className="space-y-6">
       <button onClick={onBack} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 hover:bg-emerald-50">
@@ -233,10 +241,7 @@ export default function CoursesPage() {
       .eq("is_published", true)
       .order("created_at", { ascending: true });
 
-    console.log("Courses data:", data, "Error:", error);
-
     if (error || !data || data.length === 0) {
-      console.log("Falling back to hardcoded courses");
       setCourses(FALLBACK_COURSES);
     } else {
       setCourses(data as Course[]);

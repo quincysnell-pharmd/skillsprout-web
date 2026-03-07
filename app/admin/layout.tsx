@@ -10,31 +10,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const supabase = supabaseBrowser();
   const [checking, setChecking] = useState(true);
 
-  useEffect(() => {
-    checkAdmin();
-  }, []);
+  useEffect(() => { checkAdmin(); }, []);
 
   async function checkAdmin() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        setChecking(false);
-        router.replace("/auth");
-        return;
-      }
-
-      const { data: adminRow } = await supabase
-        .from("admins")
-        .select("id")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-
-      if (!adminRow) {
-        setChecking(false);
-        router.replace("/");
-        return;
-      }
-
+      if (!session) { setChecking(false); router.replace("/auth"); return; }
+      const { data: adminRow } = await supabase.from("admins").select("id").eq("user_id", session.user.id).maybeSingle();
+      if (!adminRow) { setChecking(false); router.replace("/"); return; }
       setChecking(false);
     } catch (err) {
       console.error("Admin auth check error:", err);
@@ -51,28 +34,30 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   const navItems = [
-    { label: "Courses",   href: "/admin/courses"   },
-    { label: "Community", href: "/admin/community"  },
+    { label: "Courses",       href: "/admin/courses",       emoji: "📚" },
+    { label: "Community",     href: "/admin/community",     emoji: "🌱" },
+    { label: "Careers",       href: "/admin/careers",       emoji: "💼" },
+    { label: "Users",         href: "/admin/users",         emoji: "👥" },
+    { label: "Announcements", href: "/admin/announcements", emoji: "📣" },
   ];
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Top nav */}
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-5xl items-center gap-6 px-4 py-3">
+        <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3 flex-wrap">
           <button onClick={() => router.push("/admin/courses")}
-            className="font-display text-lg font-black text-violet-700 hover:text-violet-900 transition">
+            className="font-display text-lg font-black text-violet-700 hover:text-violet-900 transition shrink-0">
             🌱 SkillSprout Admin
           </button>
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-1 flex-wrap">
             {navItems.map(item => (
               <button key={item.href} onClick={() => router.push(item.href)}
-                className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
+                className={`rounded-xl px-3 py-2 text-sm font-bold transition ${
                   pathname.startsWith(item.href)
                     ? "bg-violet-100 text-violet-700"
                     : "text-slate-600 hover:bg-slate-100"
                 }`}>
-                {item.label}
+                {item.emoji} {item.label}
               </button>
             ))}
           </nav>
@@ -84,8 +69,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </div>
       </header>
-
-      {/* Page content */}
       <main className="mx-auto max-w-5xl px-4 py-8">
         {children}
       </main>
