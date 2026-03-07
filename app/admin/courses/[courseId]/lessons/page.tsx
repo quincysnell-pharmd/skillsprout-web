@@ -4,16 +4,11 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
 
-// ── Types ─────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────
 interface Course {
   id: string;
   title: string;
   emoji?: string;
-  description?: string;
-  category?: string;
-  level?: string;
-  duration_minutes?: number;
-  is_published?: boolean;
 }
 
 interface Lesson {
@@ -27,6 +22,7 @@ interface Lesson {
   content: string;
   is_published: boolean;
   xp_reward: number;
+  quiz_question_count: number;
 }
 
 interface QuizQuestion {
@@ -63,7 +59,8 @@ interface Project {
 
 const BLANK_LESSON: Omit<Lesson, "id"> = {
   course_id: "", title: "", description: "", order_index: 0,
-  video_url: "", video_duration: 0, content: "", is_published: false, xp_reward: 15,
+  video_url: "", video_duration: 0, content: "", is_published: false,
+  xp_reward: 15, quiz_question_count: 5,
 };
 
 const BLANK_QUIZ: Omit<QuizQuestion, "id"> = {
@@ -79,7 +76,7 @@ const inputCls = "w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5
 const textareaCls = `${inputCls} resize-none`;
 const labelCls = "block text-xs font-bold text-slate-600 mb-1.5";
 
-// ── QUIZ EDITOR ───────────────────────────────────────────────
+// ── QUIZ EDITOR ────────────────────────────────────────────────────────────
 function QuizEditor({ lessonId, onClose }: { lessonId: string; onClose: () => void }) {
   const supabase = supabaseBrowser();
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
@@ -125,7 +122,6 @@ function QuizEditor({ lessonId, onClose }: { lessonId: string; onClose: () => vo
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
         </div>
 
-        {/* Existing questions */}
         {questions.length > 0 && (
           <div className="p-6 space-y-3 border-b border-slate-100">
             {questions.map((q, i) => (
@@ -154,7 +150,6 @@ function QuizEditor({ lessonId, onClose }: { lessonId: string; onClose: () => vo
           </div>
         )}
 
-        {/* Add/edit form */}
         <div className="p-6 space-y-4">
           <h3 className="font-bold text-slate-700">{editing ? "Edit Question" : "Add Question"}</h3>
           <div>
@@ -204,12 +199,11 @@ function QuizEditor({ lessonId, onClose }: { lessonId: string; onClose: () => vo
   );
 }
 
-// ── FILE UPLOADER ─────────────────────────────────────────────
+// ── FILE UPLOADER ──────────────────────────────────────────────────────────
 function FileUploader({ lessonId, onClose }: { lessonId: string; onClose: () => void }) {
   const supabase = supabaseBrowser();
   const [files, setFiles] = useState<LessonFile[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { loadFiles(); }, [lessonId]);
@@ -223,31 +217,18 @@ function FileUploader({ lessonId, onClose }: { lessonId: string; onClose: () => 
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-    setProgress(0);
-
     const ext = file.name.split(".").pop();
     const path = `${lessonId}/${Date.now()}.${ext}`;
-
-    const { data, error } = await supabase.storage.from("course-files").upload(path, file);
+    const { error } = await supabase.storage.from("course-files").upload(path, file);
     if (error) { alert("Upload failed: " + error.message); setUploading(false); return; }
-
     const { data: { publicUrl } } = supabase.storage.from("course-files").getPublicUrl(path);
-
-    await supabase.from("lesson_files").insert({
-      lesson_id: lessonId,
-      name: file.name,
-      url: publicUrl,
-      file_type: ext,
-      size_bytes: file.size,
-    });
-
+    await supabase.from("lesson_files").insert({ lesson_id: lessonId, name: file.name, url: publicUrl, file_type: ext, size_bytes: file.size });
     await loadFiles();
     setUploading(false);
-    setProgress(100);
     if (fileRef.current) fileRef.current.value = "";
   }
 
-  async function del(id: string, url: string) {
+  async function del(id: string) {
     await supabase.from("lesson_files").delete().eq("id", id);
     setFiles((f) => f.filter((x) => x.id !== id));
   }
@@ -266,24 +247,18 @@ function FileUploader({ lessonId, onClose }: { lessonId: string; onClose: () => 
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
         </div>
         <div className="p-6 space-y-4">
-          {/* Upload area */}
           <label className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-8 cursor-pointer hover:border-violet-300 hover:bg-violet-50 transition">
             <span className="text-4xl">📤</span>
             <span className="text-sm font-bold text-slate-600">Click to upload a file (PDF, worksheet, etc.)</span>
             <span className="text-xs font-semibold text-slate-400">Max 50MB</span>
             <input ref={fileRef} type="file" className="hidden" onChange={handleUpload} accept=".pdf,.doc,.docx,.xlsx,.ppt,.pptx,.zip" />
           </label>
-
           {uploading && (
             <div className="rounded-xl bg-violet-50 border border-violet-200 p-4">
               <div className="text-sm font-bold text-violet-700 mb-2">Uploading…</div>
-              <div className="h-2 rounded-full bg-violet-200 overflow-hidden">
-                <div className="h-full rounded-full bg-violet-500 animate-pulse w-1/2" />
-              </div>
+              <div className="h-2 rounded-full bg-violet-200 overflow-hidden"><div className="h-full rounded-full bg-violet-500 animate-pulse w-1/2" /></div>
             </div>
           )}
-
-          {/* File list */}
           {files.length > 0 && (
             <div className="space-y-2">
               {files.map((f) => (
@@ -294,12 +269,11 @@ function FileUploader({ lessonId, onClose }: { lessonId: string; onClose: () => 
                     <div className="text-xs font-semibold text-slate-400">{formatSize(f.size_bytes)}</div>
                   </div>
                   <a href={f.url} target="_blank" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">View</a>
-                  <button onClick={() => del(f.id, f.url)} className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50">Delete</button>
+                  <button onClick={() => del(f.id)} className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50">Delete</button>
                 </div>
               ))}
             </div>
           )}
-
           {files.length === 0 && !uploading && (
             <p className="text-center text-sm font-semibold text-slate-400">No files uploaded yet.</p>
           )}
@@ -309,7 +283,7 @@ function FileUploader({ lessonId, onClose }: { lessonId: string; onClose: () => 
   );
 }
 
-// ── PROJECT EDITOR ────────────────────────────────────────────
+// ── PROJECT EDITOR ─────────────────────────────────────────────────────────
 function ProjectEditor({ courseId, onClose }: { courseId: string; onClose: () => void }) {
   const supabase = supabaseBrowser();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -354,7 +328,6 @@ function ProjectEditor({ courseId, onClose }: { courseId: string; onClose: () =>
           <h2 className="font-display text-xl font-bold text-slate-900">🏆 Projects</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
         </div>
-
         {projects.length > 0 && (
           <div className="p-6 space-y-3 border-b border-slate-100">
             {projects.map((p, i) => (
@@ -376,7 +349,6 @@ function ProjectEditor({ courseId, onClose }: { courseId: string; onClose: () =>
             ))}
           </div>
         )}
-
         <div className="p-6 space-y-4">
           <h3 className="font-bold text-slate-700">{editing ? "Edit Project" : "Add Project"}</h3>
           <div>
@@ -415,7 +387,7 @@ function ProjectEditor({ courseId, onClose }: { courseId: string; onClose: () =>
   );
 }
 
-// ── LESSON FORM ───────────────────────────────────────────────
+// ── LESSON FORM ────────────────────────────────────────────────────────────
 function LessonForm({
   courseId, lesson, onSave, onCancel,
 }: {
@@ -425,6 +397,7 @@ function LessonForm({
   onCancel: () => void;
 }) {
   const supabase = supabaseBrowser();
+  const router = useRouter();
   const [form, setForm] = useState<Omit<Lesson, "id">>(
     lesson ? { ...lesson } : { ...BLANK_LESSON, course_id: courseId }
   );
@@ -442,12 +415,10 @@ function LessonForm({
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-
     const ext = file.name.split(".").pop();
     const path = `${courseId}/${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from("course-videos").upload(path, file);
     if (error) { alert("Video upload failed: " + error.message); setUploading(false); return; }
-
     const { data: { publicUrl } } = supabase.storage.from("course-videos").getPublicUrl(path);
     set("video_url", publicUrl);
     setUploading(false);
@@ -484,7 +455,7 @@ function LessonForm({
           </div>
         </div>
 
-        {/* Video upload */}
+        {/* Video */}
         <div>
           <label className={labelCls}>Video</label>
           {form.video_url ? (
@@ -499,21 +470,13 @@ function LessonForm({
           ) : (
             <label className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-6 cursor-pointer hover:border-violet-300 hover:bg-violet-50 transition">
               {uploading ? (
-                <>
-                  <div className="text-3xl animate-spin">⚙️</div>
-                  <span className="text-sm font-bold text-violet-600">Uploading video…</span>
-                </>
+                <><div className="text-3xl animate-spin">⚙️</div><span className="text-sm font-bold text-violet-600">Uploading video…</span></>
               ) : (
-                <>
-                  <span className="text-3xl">🎬</span>
-                  <span className="text-sm font-bold text-slate-600">Click to upload video</span>
-                  <span className="text-xs text-slate-400">MP4, MOV, WebM</span>
-                </>
+                <><span className="text-3xl">🎬</span><span className="text-sm font-bold text-slate-600">Click to upload video</span><span className="text-xs text-slate-400">MP4, MOV, WebM</span></>
               )}
               <input ref={videoRef} type="file" className="hidden" accept="video/*" onChange={uploadVideo} disabled={uploading} />
             </label>
           )}
-          {/* Or paste URL */}
           <div className="mt-2">
             <input className={inputCls} value={form.video_url} onChange={(e) => set("video_url", e.target.value)}
               placeholder="Or paste a video URL (YouTube embed, Vimeo, etc.)" />
@@ -525,10 +488,10 @@ function LessonForm({
           <label className={labelCls}>Written Content / Instructions (markdown supported)</label>
           <textarea className={textareaCls} rows={6} value={form.content}
             onChange={(e) => set("content", e.target.value)}
-            placeholder={"## What you'll need\n- A cutting board\n- A knife\n- An adult helper\n\n## Instructions\n1. Wash your hands first..."} />
+            placeholder={"## What you'll need\n- A cutting board\n- A knife\n- An adult helper\n\n## Instructions\n1. Wash your hands first...\n\nUse [[PORTFOLIO_PROMPT]] to embed a portfolio activity block."} />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div>
             <label className={labelCls}>XP Reward</label>
             <input className={inputCls} type="number" min={0} value={form.xp_reward} onChange={(e) => set("xp_reward", Number(e.target.value))} />
@@ -536,6 +499,10 @@ function LessonForm({
           <div>
             <label className={labelCls}>Order</label>
             <input className={inputCls} type="number" min={0} value={form.order_index} onChange={(e) => set("order_index", Number(e.target.value))} />
+          </div>
+          <div>
+            <label className={labelCls}>Quiz Questions to Show</label>
+            <input className={inputCls} type="number" min={0} value={form.quiz_question_count ?? 5} onChange={(e) => set("quiz_question_count", Number(e.target.value))} />
           </div>
         </div>
 
@@ -547,7 +514,7 @@ function LessonForm({
           </label>
         </div>
 
-        {/* Quiz & Files buttons (only when editing existing lesson) */}
+        {/* Action buttons — only for existing lessons */}
         {lesson && (
           <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
             <button onClick={() => setShowQuiz(true)}
@@ -557,6 +524,10 @@ function LessonForm({
             <button onClick={() => setShowFiles(true)}
               className="rounded-xl border-2 border-sky-200 bg-sky-50 px-4 py-2 text-sm font-bold text-sky-700 hover:bg-sky-100 transition">
               📎 Manage Files
+            </button>
+            <button onClick={() => router.push(`/admin/courses/${lesson.course_id}/lessons/${lesson.id}/steps`)}
+              className="rounded-xl border-2 border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 transition">
+              🪜 Manage Steps →
             </button>
           </div>
         )}
@@ -576,18 +547,18 @@ function LessonForm({
   );
 }
 
-// ── MAIN PAGE ─────────────────────────────────────────────────
+// ── MAIN PAGE ──────────────────────────────────────────────────────────────
 export default function AdminLessonsPage() {
   const params   = useParams();
   const router   = useRouter();
   const supabase = supabaseBrowser();
   const courseId = params.courseId as string;
 
-  const [course, setCourse]     = useState<Course | null>(null);
-  const [lessons, setLessons]   = useState<Lesson[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [adding, setAdding]     = useState(false);
-  const [editing, setEditing]   = useState<Lesson | null>(null);
+  const [course, setCourse]   = useState<Course | null>(null);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding]   = useState(false);
+  const [editing, setEditing] = useState<Lesson | null>(null);
   const [showProject, setShowProject] = useState(false);
 
   useEffect(() => { if (courseId) loadData(); }, [courseId]);
@@ -595,7 +566,7 @@ export default function AdminLessonsPage() {
   async function loadData() {
     setLoading(true);
     const [{ data: courseData }, { data: lessonData }] = await Promise.all([
-      supabase.from("courses").select("id, title, emoji, description, category, level, duration_minutes, is_published").eq("id", courseId).maybeSingle(),
+      supabase.from("courses").select("id, title, emoji").eq("id", courseId).maybeSingle(),
       supabase.from("lessons").select("*").eq("course_id", courseId).order("order_index"),
     ]);
     setCourse(courseData as Course);
@@ -627,27 +598,11 @@ export default function AdminLessonsPage() {
             ← Back
           </button>
           <div>
-          <h1 className="font-display text-2xl font-black text-slate-900">
-            {course?.emoji} {course?.title}
-          </h1>
-          <div className="flex flex-wrap items-center gap-2 mt-1.5">
-            <span className="text-sm font-semibold text-slate-500">{lessons.length} lesson{lessons.length !== 1 ? "s" : ""}</span>
-            {course?.category && <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600 capitalize">{course.category}</span>}
-            {course?.level && <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-bold text-violet-700 capitalize">{course.level}</span>}
-            {course?.duration_minutes && <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600">{course.duration_minutes} min</span>}
-            <button
-              onClick={async () => {
-                const newVal = !course?.is_published;
-                await supabase.from("courses").update({ is_published: newVal }).eq("id", courseId);
-                setCourse((c) => c ? { ...c, is_published: newVal } : c);
-              }}
-              className={`rounded-full px-3 py-1 text-xs font-bold transition hover:opacity-80 ${course?.is_published ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-amber-100 text-amber-700 hover:bg-amber-200"}`}
-            >
-              {course?.is_published ? "✓ Published — click to unpublish" : "Draft — click to publish"}
-            </button>
+            <h1 className="font-display text-2xl font-black text-slate-900">
+              {course?.emoji} {course?.title}
+            </h1>
+            <p className="text-sm font-semibold text-slate-500 mt-0.5">{lessons.length} lesson{lessons.length !== 1 ? "s" : ""}</p>
           </div>
-          {course?.description && <p className="text-sm font-semibold text-slate-400 mt-1.5 max-w-lg">{course.description}</p>}
-        </div>
           <div className="ml-auto flex gap-2">
             <button onClick={() => setShowProject(true)}
               className="rounded-xl border-2 border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700 hover:bg-amber-100 transition">
@@ -694,16 +649,23 @@ export default function AdminLessonsPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-bold text-slate-900">{lesson.title}</div>
-                      <div className="flex items-center gap-3 mt-1">
+                      <div className="flex items-center gap-3 mt-1 flex-wrap">
                         {lesson.video_url && <span className="text-xs font-semibold text-emerald-600">🎬 Video</span>}
                         {lesson.content && <span className="text-xs font-semibold text-sky-600">📝 Content</span>}
                         <span className="text-xs font-semibold text-amber-600">⭐ {lesson.xp_reward} XP</span>
+                        {(lesson.quiz_question_count ?? 0) > 0 && (
+                          <span className="text-xs font-semibold text-violet-600">⚡ {lesson.quiz_question_count}Q quiz</span>
+                        )}
                         <span className={`text-xs font-bold rounded-full px-2 py-0.5 ${lesson.is_published ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
                           {lesson.is_published ? "Published" : "Draft"}
                         </span>
                       </div>
                     </div>
                     <div className="flex gap-2 shrink-0">
+                      <button onClick={() => router.push(`/admin/courses/${courseId}/lessons/${lesson.id}/steps`)}
+                        className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition">
+                        Steps →
+                      </button>
                       <button onClick={() => { setEditing(lesson); setAdding(false); }}
                         className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition">
                         Edit

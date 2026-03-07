@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
 import SetActiveChildOnLoad from "@/components/child/SetActiveChildOnLoad";
+import PortfolioPage from "@/components/portfolio/PortfolioPage";
 
 // ── Types ─────────────────────────────────────────────────────
 interface ChildProfile {
@@ -43,19 +44,18 @@ const AVATARS = [
 
 // ── XP Level system ───────────────────────────────────────────
 const XP_LEVELS = [
-  { min: 0,    max: 100,  label: "Seedling",    emoji: "🌱", color: "emerald" },
-  { min: 100,  max: 300,  label: "Sprout",      emoji: "🌿", color: "green"   },
-  { min: 300,  max: 600,  label: "Bloom",       emoji: "🌸", color: "pink"    },
-  { min: 600,  max: 1000, label: "Harvest",     emoji: "🌻", color: "amber"   },
-  { min: 1000, max: 2000, label: "Grove",       emoji: "🌳", color: "teal"    },
-  { min: 2000, max: 5000, label: "Forest",      emoji: "🌲", color: "cyan"    },
-  { min: 5000, max: 9999, label: "Legend",      emoji: "🏆", color: "violet"  },
+  { min: 0,    max: 100,  label: "Seedling", emoji: "🌱", color: "emerald" },
+  { min: 100,  max: 300,  label: "Sprout",   emoji: "🌿", color: "green"   },
+  { min: 300,  max: 600,  label: "Bloom",    emoji: "🌸", color: "pink"    },
+  { min: 600,  max: 1000, label: "Harvest",  emoji: "🌻", color: "amber"   },
+  { min: 1000, max: 2000, label: "Grove",    emoji: "🌳", color: "teal"    },
+  { min: 2000, max: 5000, label: "Forest",   emoji: "🌲", color: "cyan"    },
+  { min: 5000, max: 9999, label: "Legend",   emoji: "🏆", color: "violet"  },
 ];
 
 function getLevel(xp: number) {
   return XP_LEVELS.findLast((l) => xp >= l.min) ?? XP_LEVELS[0];
 }
-
 function getNextLevel(xp: number) {
   return XP_LEVELS.find((l) => xp < l.max) ?? XP_LEVELS[XP_LEVELS.length - 1];
 }
@@ -92,16 +92,13 @@ function AvatarPicker({ current, onSelect, onClose }: { current: string; onSelec
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-display text-xl font-bold text-slateald-900">Choose your avatar!</h2>
+          <h2 className="font-display text-xl font-bold text-slate-900">Choose your avatar!</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
         </div>
         <div className="grid grid-cols-8 gap-2 max-h-72 overflow-y-auto">
           {AVATARS.map((a) => (
-            <button
-              key={a}
-              onClick={() => { onSelect(a); onClose(); }}
-              className={`text-2xl rounded-xl p-1.5 transition-all hover:scale-110 ${current === a ? "bg-emerald-100 ring-2 ring-emerald-400 scale-110" : "hover:bg-slate-100"}`}
-            >
+            <button key={a} onClick={() => { onSelect(a); onClose(); }}
+              className={`text-2xl rounded-xl p-1.5 transition-all hover:scale-110 ${current === a ? "bg-emerald-100 ring-2 ring-emerald-400 scale-110" : "hover:bg-slate-100"}`}>
               {a}
             </button>
           ))}
@@ -119,15 +116,15 @@ export default function ChildDashboard() {
   const supabase = supabaseBrowser();
   const childId  = params.childId as string;
 
-  const [child, setChild]               = useState<ChildProfile | null>(null);
-  const [badges, setBadges]             = useState<Badge[]>([]);
-  const [enrollments, setEnrollments]   = useState<Enrollment[]>([]);
-  const [loading, setLoading]           = useState(true);
+  const [child, setChild]             = useState<ChildProfile | null>(null);
+  const [badges, setBadges]           = useState<Badge[]>([]);
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [loading, setLoading]         = useState(true);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
-  const [editingName, setEditingName]   = useState(false);
-  const [nameInput, setNameInput]       = useState("");
-  const [savingName, setSavingName]     = useState(false);
-  const [activeTab, setActiveTab]       = useState<"home" | "courses" | "badges" | "friends">("home");
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput]     = useState("");
+  const [savingName, setSavingName]   = useState(false);
+  const [activeTab, setActiveTab]     = useState<"home" | "courses" | "badges" | "portfolio" | "friends">("home");
 
   useEffect(() => { if (childId) loadData(); }, [childId]);
 
@@ -184,10 +181,10 @@ export default function ChildDashboard() {
 
   if (!child) return null;
 
-  const level     = getLevel(child.xp);
-  const nextLevel = getNextLevel(child.xp);
+  const level      = getLevel(child.xp);
+  const nextLevel  = getNextLevel(child.xp);
   const xpProgress = Math.min(100, Math.round(((child.xp - level.min) / (nextLevel.max - level.min)) * 100));
-  const avatar = child.avatar_url || "🌱";
+  const avatar     = child.avatar_url || "🌱";
 
   return (
     <>
@@ -200,37 +197,24 @@ export default function ChildDashboard() {
 
         {/* ── HERO CARD ── */}
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-400 via-emerald-500 to-teal-600 p-6 text-white shadow-lg">
-          {/* Decorative blobs */}
           <div className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 rounded-full bg-white/10" />
           <div className="pointer-events-none absolute -bottom-10 -left-10 h-52 w-52 rounded-full bg-white/5" />
 
           <div className="relative flex items-start gap-4">
-            {/* Avatar */}
-            <button
-              onClick={() => setShowAvatarPicker(true)}
-              className="group relative shrink-0"
-              title="Change avatar"
-            >
+            <button onClick={() => setShowAvatarPicker(true)} className="group relative shrink-0" title="Change avatar">
               <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-white/20 text-5xl backdrop-blur-sm border-2 border-white/30 shadow-lg transition group-hover:scale-105 group-hover:bg-white/30">
                 {avatar}
               </div>
-              <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-white text-xs shadow-md">
-                ✏️
-              </div>
+              <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-white text-xs shadow-md">✏️</div>
             </button>
 
-            {/* Name + stats */}
             <div className="flex-1 min-w-0">
               {editingName ? (
                 <div className="flex items-center gap-2 mb-1">
-                  <input
-                    value={nameInput}
-                    onChange={(e) => setNameInput(e.target.value)}
+                  <input value={nameInput} onChange={(e) => setNameInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") saveName(); if (e.key === "Escape") setEditingName(false); }}
-                    maxLength={20}
-                    autoFocus
-                    className="rounded-xl bg-white/20 border border-white/40 px-3 py-1.5 text-lg font-bold text-white placeholder-white/60 outline-none focus:bg-white/30 w-40"
-                  />
+                    maxLength={20} autoFocus
+                    className="rounded-xl bg-white/20 border border-white/40 px-3 py-1.5 text-lg font-bold text-white placeholder-white/60 outline-none focus:bg-white/30 w-40" />
                   <button onClick={saveName} disabled={savingName} className="rounded-lg bg-white/20 px-3 py-1.5 text-sm font-bold hover:bg-white/30 transition">
                     {savingName ? "…" : "✓"}
                   </button>
@@ -243,7 +227,6 @@ export default function ChildDashboard() {
                 </button>
               )}
               <p className="text-sm font-semibold text-white/70">@{child.username}</p>
-
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-sm font-bold backdrop-blur-sm border border-white/20">
                   🔥 {child.streak_count} day streak
@@ -255,17 +238,13 @@ export default function ChildDashboard() {
             </div>
           </div>
 
-          {/* XP Bar */}
           <div className="relative mt-5">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-xs font-bold text-white/80">{child.xp} XP</span>
               <span className="text-xs font-bold text-white/80">Next: {nextLevel.label} {nextLevel.emoji} ({nextLevel.max} XP)</span>
             </div>
             <div className="h-3 rounded-full bg-white/20 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-white transition-all duration-700 shadow-sm"
-                style={{ width: `${xpProgress}%` }}
-              />
+              <div className="h-full rounded-full bg-white transition-all duration-700 shadow-sm" style={{ width: `${xpProgress}%` }} />
             </div>
           </div>
         </div>
@@ -274,23 +253,20 @@ export default function ChildDashboard() {
         {child.status === "pending" && <PendingBanner childId={childId} />}
 
         {/* ── TABS ── */}
-        <div className="flex gap-1 rounded-2xl bg-slate-100 p-1">
+        <div className="grid grid-cols-5 gap-1 rounded-2xl bg-slate-100 p-1">
           {([
-            { key: "home",    label: "Home",    icon: "🏠" },
-            { key: "courses", label: "Courses", icon: "📚" },
-            { key: "badges",  label: "Badges",  icon: "🏅" },
-            { key: "friends", label: "Friends", icon: "👯" },
+            { key: "home",      label: "Home",      icon: "🏠" },
+            { key: "courses",   label: "Courses",   icon: "📚" },
+            { key: "badges",    label: "Badges",    icon: "🏅" },
+            { key: "portfolio", label: "Portfolio", icon: "📈" },
+            { key: "friends",   label: "Friends",   icon: "👯" },
           ] as const).map(({ key, label, icon }) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              className={`flex-1 rounded-xl py-2 text-sm font-bold transition-all ${
-                activeTab === key
-                  ? "bg-white text-emerald-700 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              <span className="mr-1">{icon}</span>{label}
+            <button key={key} onClick={() => setActiveTab(key)}
+              className={`rounded-xl py-2 text-xs font-bold transition-all ${
+                activeTab === key ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}>
+              <div>{icon}</div>
+              <div>{label}</div>
             </button>
           ))}
         </div>
@@ -298,12 +274,11 @@ export default function ChildDashboard() {
         {/* ── HOME TAB ── */}
         {activeTab === "home" && (
           <div className="space-y-4">
-            {/* Quick links */}
             <div className="grid grid-cols-3 gap-3">
               {[
-                { href: "/explore", icon: "⚡", label: "Daily Challenge", color: "from-amber-50 to-orange-50 border-amber-100 hover:border-amber-300" },
-                { href: "/courses", icon: "📚", label: "Courses",         color: "from-emerald-50 to-teal-50 border-emerald-100 hover:border-emerald-300" },
-                { href: "/careers", icon: "🚀", label: "Careers",         color: "from-sky-50 to-indigo-50 border-sky-100 hover:border-sky-300" },
+                { href: "/explore",   icon: "⚡", label: "Daily Challenge", color: "from-amber-50 to-orange-50 border-amber-100 hover:border-amber-300"     },
+                { href: "/courses",   icon: "📚", label: "Courses",         color: "from-emerald-50 to-teal-50 border-emerald-100 hover:border-emerald-300" },
+                { href: "/futures",   icon: "🚀", label: "Futures",         color: "from-sky-50 to-indigo-50 border-sky-100 hover:border-sky-300"           },
               ].map(({ href, icon, label, color }) => (
                 <a key={href} href={href}
                   className={`flex flex-col items-center gap-2 rounded-2xl border bg-gradient-to-br p-4 text-center transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 ${color}`}>
@@ -313,7 +288,6 @@ export default function ChildDashboard() {
               ))}
             </div>
 
-            {/* Recent courses preview */}
             <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-display text-lg font-bold text-slate-900">📚 My Courses</h2>
@@ -347,7 +321,21 @@ export default function ChildDashboard() {
               )}
             </div>
 
-            {/* Recent badges preview */}
+            {/* Portfolio preview on home tab */}
+            <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-display text-lg font-bold text-slate-900">📈 My Portfolio</h2>
+                <button onClick={() => setActiveTab("portfolio")} className="text-xs font-bold text-emerald-600 hover:text-emerald-800">See all →</button>
+              </div>
+              <div className="rounded-xl border-2 border-dashed border-emerald-200 bg-emerald-50 p-4 text-center">
+                <p className="text-sm font-semibold text-emerald-700">Track your practice investments!</p>
+                <button onClick={() => setActiveTab("portfolio")}
+                  className="mt-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 transition">
+                  Open Portfolio →
+                </button>
+              </div>
+            </div>
+
             {badges.length > 0 && (
               <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
@@ -425,46 +413,39 @@ export default function ChildDashboard() {
           </div>
         )}
 
+        {/* ── PORTFOLIO TAB ── */}
+        {activeTab === "portfolio" && (
+          <PortfolioPage childId={childId} />
+        )}
+
         {/* ── FRIENDS TAB ── */}
         {activeTab === "friends" && (
           <div className="space-y-4">
             <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
               <h2 className="font-display text-lg font-bold text-slate-900 mb-1">👯 Friends</h2>
               <p className="text-xs font-semibold text-slate-400 mb-5">Add friends and cheer each other on!</p>
-
-              {/* Add friend */}
               <div className="rounded-xl border-2 border-dashed border-emerald-200 bg-emerald-50 p-4 text-center mb-4">
                 <div className="text-3xl mb-2">🔍</div>
                 <p className="text-sm font-bold text-emerald-800">Find a friend by username</p>
                 <p className="text-xs font-semibold text-emerald-600 mt-0.5 mb-3">Coming soon — friends launching shortly!</p>
                 <div className="flex gap-2 max-w-xs mx-auto">
-                  <input
-                    placeholder="Enter their username…"
-                    disabled
-                    className="flex-1 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-slate-400 outline-none opacity-60"
-                  />
+                  <input placeholder="Enter their username…" disabled
+                    className="flex-1 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-slate-400 outline-none opacity-60" />
                   <button disabled className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white opacity-50">Add</button>
                 </div>
               </div>
-
-              {/* Empty friends list */}
               <div className="text-center py-8">
                 <div className="text-5xl mb-3">🌱</div>
                 <p className="text-sm font-semibold text-slate-400">No friends yet.</p>
                 <p className="text-xs font-semibold text-slate-400 mt-1">When you add friends, you'll see their streaks and progress here!</p>
               </div>
             </div>
-
-            {/* Pre-chosen messages preview */}
             <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
               <h2 className="font-display text-base font-bold text-slate-900 mb-3">💬 Quick Messages</h2>
               <p className="text-xs font-semibold text-slate-400 mb-3">Send a friend one of these encouraging messages!</p>
               <div className="flex flex-wrap gap-2">
                 {["🔥 You're on fire!", "⭐ Amazing work!", "💪 Keep going!", "🎉 Congrats!", "🌱 You're growing!", "🏆 You're a legend!"].map((msg) => (
-                  <button key={msg} disabled
-                    className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-500 opacity-60 cursor-not-allowed">
-                    {msg}
-                  </button>
+                  <button key={msg} disabled className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-500 opacity-60 cursor-not-allowed">{msg}</button>
                 ))}
               </div>
               <p className="mt-3 text-xs font-semibold text-emerald-600">🔒 Unlocks when friends are added!</p>
