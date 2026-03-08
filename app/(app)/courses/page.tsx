@@ -279,17 +279,7 @@ export default function CoursesPage() {
         <p className="mt-2 max-w-xl text-base font-semibold text-slate-500">
           From Seedling to Harvest — find the right level for you!
         </p>
-        {role === "parent" && (
-          <div className="mt-4 flex items-center gap-3 flex-wrap">
-            <p className="text-sm font-semibold text-violet-700">You're browsing as a parent. Unlock courses from your dashboard.</p>
-            <button
-              onClick={() => router.push("/dashboard/parent")}
-              className="rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-violet-700 transition"
-            >
-              Go to Parent Dashboard →
-            </button>
-          </div>
-        )}
+
       </section>
 
       {/* Request message */}

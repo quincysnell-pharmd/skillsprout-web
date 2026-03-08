@@ -260,7 +260,13 @@ function ParentDashboardInner() {
 
   async function loadData() {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    // Retry auth up to 3 times — needed after Stripe redirect which can delay session restore
+    let user = null;
+    for (let i = 0; i < 3; i++) {
+      const { data } = await supabase.auth.getUser();
+      if (data.user) { user = data.user; break; }
+      await new Promise(r => setTimeout(r, 600));
+    }
     if (!user) { router.replace("/auth"); return; }
 
     const { data: parentRow } = await supabase.from("parents").select("id, invite_code, email").eq("user_id", user.id).maybeSingle();

@@ -13,11 +13,14 @@ interface Course {
   level: string;
   duration_minutes: number;
   is_published: boolean;
+  price_cents: number;
+  stripe_price_id: string;
 }
 
 const BLANK: Omit<Course, "id"> = {
   title: "", slug: "", description: "", category: "cooking",
   level: "seed", duration_minutes: 60, is_published: false,
+  price_cents: 0, stripe_price_id: "",
 };
 
 const CATEGORIES = ["cooking","coding","gardening","money","art","science","music","writing"];
@@ -171,6 +174,29 @@ export default function AdminCourses() {
                 = {form.duration_minutes} min
               </span>
             </div>
+          </Field>
+          <Field label="Price (USD)">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-semibold text-slate-500">$</span>
+              <input
+                className={inputCls}
+                type="number"
+                min={0}
+                step={0.01}
+                value={(form.price_cents / 100).toFixed(2)}
+                onChange={(e) => set("price_cents", Math.round(Number(e.target.value) * 100))}
+                placeholder="0.00"
+              />
+              {form.price_cents === 0 && <span className="text-xs font-bold text-emerald-600">Free</span>}
+            </div>
+          </Field>
+          <Field label="Stripe Price ID">
+            <input
+              className={inputCls}
+              value={form.stripe_price_id}
+              onChange={(e) => set("stripe_price_id", e.target.value)}
+              placeholder="price_1... (from Stripe dashboard)"
+            />
           </Field>
           <Field label="Status">
             <label className="flex items-center gap-2 cursor-pointer">
