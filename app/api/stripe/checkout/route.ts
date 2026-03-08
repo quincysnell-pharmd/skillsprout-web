@@ -2,14 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-02-25.clover" });
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export async function POST(req: NextRequest) {
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-02-25.clover" });
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
   try {
     const { courseId, childId, parentId } = await req.json();
 
@@ -17,7 +16,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // Fetch course details
     const { data: course, error: courseError } = await supabase
       .from("courses")
       .select("id, title, price_cents, stripe_price_id, thumbnail_url")
@@ -28,7 +26,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Course not found" }, { status: 404 });
     }
 
-    // Fetch child name for display
     const { data: child } = await supabase
       .from("child_profiles")
       .select("display_name")
@@ -37,7 +34,6 @@ export async function POST(req: NextRequest) {
 
     const childName = child?.display_name ?? "your child";
 
-    // Check if already enrolled and paid
     const { data: existing } = await supabase
       .from("enrollments")
       .select("id, paid")
@@ -54,20 +50,14 @@ export async function POST(req: NextRequest) {
     let sessionParams: Stripe.Checkout.SessionCreateParams;
 
     if (course.stripe_price_id) {
-      // Use pre-created Stripe Price ID
       sessionParams = {
         mode: "payment",
         line_items: [{ price: course.stripe_price_id, quantity: 1 }],
         success_url: `${appUrl}/parent/dashboard?payment=success&course=${courseId}&child=${childId}`,
         cancel_url: `${appUrl}/parent/dashboard?payment=cancelled`,
-        metadata: {
-          courseId,
-          childId,
-          parentId,
-        },
+        metadata: { courseId, childId, parentId },
       };
     } else {
-      // Create dynamic price from price_cents stored in DB
       sessionParams = {
         mode: "payment",
         line_items: [
@@ -86,17 +76,12 @@ export async function POST(req: NextRequest) {
         ],
         success_url: `${appUrl}/parent/dashboard?payment=success&course=${courseId}&child=${childId}`,
         cancel_url: `${appUrl}/parent/dashboard?payment=cancelled`,
-        metadata: {
-          courseId,
-          childId,
-          parentId,
-        },
+        metadata: { courseId, childId, parentId },
       };
     }
 
     const session = await stripe.checkout.sessions.create(sessionParams);
 
-    // Upsert a pending enrollment record so we can track it
     await supabase.from("enrollments").upsert(
       {
         child_id: childId,
