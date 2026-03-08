@@ -12,6 +12,7 @@ interface Course {
   category?: string;
   level?: string;
   bg?: string;
+  price_cents: number;
 }
 
 interface Lesson {
@@ -32,18 +33,25 @@ interface LessonProgress {
   quiz_score?: number;
 }
 
+interface EnrollmentRow {
+  id?: string;
+  paid: boolean;
+  progress_pct: number;
+}
+
 export default function CourseOverviewPage() {
   const params   = useParams();
   const router   = useRouter();
   const supabase = supabaseBrowser();
   const courseId = params.courseId as string;
 
-  const [course, setCourse]     = useState<Course | null>(null);
-  const [lessons, setLessons]   = useState<Lesson[]>([]);
-  const [progress, setProgress] = useState<Map<string, LessonProgress>>(new Map());
-  const [childId, setChildId]   = useState<string | null>(null);
-  const [loading, setLoading]   = useState(true);
-  const [enrolled, setEnrolled] = useState(false);
+  const [course, setCourse]           = useState<Course | null>(null);
+  const [lessons, setLessons]         = useState<Lesson[]>([]);
+  const [progress, setProgress]       = useState<Map<string, LessonProgress>>(new Map());
+  const [childId, setChildId]         = useState<string | null>(null);
+  const [isLinked, setIsLinked]       = useState(false);
+  const [enrollment, setEnrollment]   = useState<EnrollmentRow | null>(null);
+  const [loading, setLoading]         = useState(true);
 
   useEffect(() => { if (courseId) loadData(); }, [courseId]);
 
@@ -61,16 +69,21 @@ export default function CourseOverviewPage() {
 
     if (user) {
       const { data: childRow } = await supabase
-        .from("child_profiles").select("id").eq("user_id", user.id).maybeSingle();
+        .from("child_profiles").select("id, parent_id").eq("user_id", user.id).maybeSingle();
       if (childRow) {
         setChildId(childRow.id);
+        setIsLinked(!!childRow.parent_id);
 
-        // Check enrollment
+        // Check enrollment (includes paid status)
         const { data: enrollRow } = await supabase
-          .from("enrollments").select("id").eq("child_id", childRow.id).eq("course_id", courseId).maybeSingle();
-        setEnrolled(!!enrollRow);
+          .from("enrollments")
+          .select("id, paid, progress_pct")
+          .eq("child_id", childRow.id)
+          .eq("course_id", courseId)
+          .maybeSingle();
+        setEnrollment(enrollRow as EnrollmentRow ?? null);
 
-        // Load progress
+        // Load lesson progress
         const { data: progressData } = await supabase
           .from("lesson_progress").select("*").eq("child_id", childRow.id)
           .in("lesson_id", (lessonData ?? []).map((l: Lesson) => l.id));
@@ -83,13 +96,8 @@ export default function CourseOverviewPage() {
     setLoading(false);
   }
 
-  async function enroll() {
-    if (!childId) { router.push("/auth"); return; }
-    await supabase.from("enrollments").insert({ child_id: childId, course_id: courseId, progress_pct: 0 });
-    setEnrolled(true);
-  }
-
   function isLocked(lesson: Lesson, index: number): boolean {
+    if (!enrollment?.paid) return true; // whole course locked if not paid
     if (index === 0) return false;
     const prev = lessons[index - 1];
     const prevProgress = progress.get(prev.id);
@@ -120,9 +128,76 @@ export default function CourseOverviewPage() {
     </div>
   );
 
+  const isPaid  = enrollment?.paid === true;
+  const pct     = lessons.length > 0 ? Math.round((completedCount() / lessons.length) * 100) : 0;
   const totalXP = lessons.reduce((sum, l) => sum + (l.xp_reward ?? 0), 0);
-  const pct = lessons.length > 0 ? Math.round((completedCount() / lessons.length) * 100) : 0;
+  const price   = ((course.price_cents ?? 999) / 100).toFixed(2);
 
+  // ── PAYMENT GATE ──────────────────────────────────────────────
+  if (!isPaid) {
+    // Not linked to a parent at all
+    if (!isLinked) {
+      return (
+        <div className="max-w-md mx-auto mt-16 px-4 space-y-4">
+          <button onClick={() => router.push("/courses")}
+            className="text-sm font-bold text-slate-500 hover:text-emerald-600 transition">← Back to Courses</button>
+          <div className="rounded-3xl border-2 border-amber-300 bg-amber-50 p-8 text-center space-y-5">
+            <div className="text-6xl">🔗</div>
+            <h2 className="font-display text-2xl font-black text-amber-900">Almost there!</h2>
+            <p className="text-sm font-semibold text-amber-700 leading-relaxed">
+              To unlock <span className="font-black">{course.title}</span>, you need to be linked to a parent account first.
+            </p>
+            <div className="rounded-2xl border border-amber-200 bg-white p-5 text-left space-y-2">
+              <p className="text-xs font-black text-amber-800 uppercase tracking-wide">Ask your parent to:</p>
+              <div className="space-y-1.5 text-sm font-semibold text-amber-700">
+                <p>1. Create a SkillSprout parent account</p>
+                <p>2. Link your profile to their account</p>
+                <p>3. Unlock this course for you</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Linked but not paid
+    return (
+      <div className="max-w-md mx-auto mt-16 px-4 space-y-4">
+        <button onClick={() => router.push("/courses")}
+          className="text-sm font-bold text-slate-500 hover:text-emerald-600 transition">← Back to Courses</button>
+        <div className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${course.bg ?? "from-emerald-400 to-teal-600"} p-8 text-white text-center space-y-3 shadow-lg`}>
+          <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
+          <div className="text-6xl">{course.emoji ?? "📚"}</div>
+          <h2 className="font-display text-2xl font-black">{course.title}</h2>
+          {course.description && <p className="text-white/80 text-sm font-semibold">{course.description}</p>}
+          <div className="flex justify-center flex-wrap gap-2 mt-2">
+            {course.level && <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold capitalize">{course.level}</span>}
+            <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold">{lessons.length} lessons</span>
+            <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold">⭐ {totalXP} XP total</span>
+          </div>
+        </div>
+        <div className="rounded-3xl border-2 border-violet-300 bg-violet-50 p-8 text-center space-y-5">
+          <div className="text-5xl">🔒</div>
+          <h3 className="font-display text-xl font-black text-violet-900">Course Locked</h3>
+          <div className="rounded-2xl border border-violet-200 bg-white px-6 py-4 inline-block">
+            <span className="text-3xl font-black text-violet-800">${price}</span>
+            <span className="text-sm font-bold text-violet-500 ml-1">one-time</span>
+          </div>
+          <div className="rounded-2xl border border-violet-200 bg-white p-5 text-left space-y-2">
+            <p className="text-xs font-black text-violet-800 uppercase tracking-wide">Ask your parent to:</p>
+            <div className="space-y-1.5 text-sm font-semibold text-violet-700">
+              <p>1. Sign in to their SkillSprout account</p>
+              <p>2. Go to their Parent Dashboard → Courses tab</p>
+              <p>3. Click "Unlock" next to <span className="font-black">{course.title}</span></p>
+            </div>
+          </div>
+          <p className="text-xs font-semibold text-violet-400">Your progress will be saved once unlocked 🌱</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── FULL COURSE VIEW (paid) ───────────────────────────────────
   return (
     <div className="max-w-2xl mx-auto space-y-6 py-6 px-4">
       {/* Back */}
@@ -144,7 +219,7 @@ export default function CourseOverviewPage() {
           <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold">⭐ {totalXP} XP total</span>
         </div>
 
-        {enrolled && lessons.length > 0 && (
+        {lessons.length > 0 && (
           <div className="mt-5">
             <div className="flex justify-between text-xs font-bold text-white/80 mb-1.5">
               <span>{completedCount()} of {lessons.length} lessons complete</span>
@@ -157,18 +232,6 @@ export default function CourseOverviewPage() {
         )}
       </div>
 
-      {/* Enroll CTA */}
-      {!enrolled && (
-        <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-6 text-center">
-          <p className="font-bold text-emerald-800 text-lg">Ready to start learning?</p>
-          <p className="text-sm font-semibold text-emerald-600 mt-1 mb-4">Enroll to unlock all lessons and track your progress!</p>
-          <button onClick={enroll}
-            className="rounded-xl bg-emerald-600 px-8 py-3 font-bold text-white hover:bg-emerald-700 transition">
-            Enroll Free 🌱
-          </button>
-        </div>
-      )}
-
       {/* Lessons list */}
       <div className="space-y-3">
         <h2 className="font-display text-xl font-bold text-slate-900">Lessons</h2>
@@ -179,7 +242,7 @@ export default function CourseOverviewPage() {
           </div>
         ) : (
           lessons.map((lesson, i) => {
-            const locked = enrolled ? isLocked(lesson, i) : i > 0;
+            const locked = isLocked(lesson, i);
             const status = getStatus(lesson);
             const p = progress.get(lesson.id);
 
@@ -187,7 +250,6 @@ export default function CourseOverviewPage() {
               <button
                 key={lesson.id}
                 onClick={() => {
-                  if (!enrolled) { enroll(); return; }
                   if (locked) return;
                   router.push(`/courses/${courseId}/lessons/${lesson.id}`);
                 }}
@@ -200,7 +262,6 @@ export default function CourseOverviewPage() {
                     : "border-slate-200 bg-white hover:border-emerald-200 hover:shadow-md hover:-translate-y-0.5"
                 }`}
               >
-                {/* Step number / status icon */}
                 <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-lg font-black ${
                   locked ? "bg-slate-200 text-slate-400"
                   : status === "completed" ? "bg-emerald-500 text-white"
