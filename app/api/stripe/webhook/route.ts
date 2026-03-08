@@ -2,16 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-02-25.clover" });
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export const config = { api: { bodyParser: false } };
 
 export async function POST(req: NextRequest) {
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-02-25.clover" });
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
   const body = await req.text();
   const sig = req.headers.get("stripe-signature");
 
@@ -32,14 +31,13 @@ export async function POST(req: NextRequest) {
     const session = event.data.object as Stripe.Checkout.Session;
 
     if (session.payment_status === "paid") {
-      const { courseId, childId, parentId } = session.metadata ?? {};
+      const { courseId, childId } = session.metadata ?? {};
 
       if (!courseId || !childId) {
         console.error("Missing metadata in Stripe session:", session.id);
         return NextResponse.json({ error: "Missing metadata" }, { status: 400 });
       }
 
-      // Mark enrollment as paid
       const { error } = await supabase
         .from("enrollments")
         .upsert(
