@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
 import { formatCode, cleanCode, generateCode } from "@/app/lib/linkCodes";
 import ParentPostApprovals from "@/components/community/ParentPostApprovals";
@@ -224,9 +224,8 @@ function CoursesTab({ children, courses, enrollments, requests, parentId, onRefr
 }
 
 // ── Main Page ─────────────────────────────────────────────────
-export default function ParentDashboard() {
+function ParentDashboardInner() {
   const router       = useRouter();
-  const searchParams = useSearchParams();
   const supabase     = supabaseBrowser();
 
   const [parent, setParent]               = useState<ParentRow | null>(null);
@@ -245,9 +244,10 @@ export default function ParentDashboard() {
 
   useEffect(() => {
     loadData();
-    const payment  = searchParams.get("payment");
-    const courseId = searchParams.get("course");
-    const childId  = searchParams.get("child");
+    const params   = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    const payment  = params.get("payment");
+    const courseId = params.get("course");
+    const childId  = params.get("child");
     if (payment === "success" && courseId && childId) {
       setMsg({ text: "🎉 Course unlocked! Your child can now start learning.", ok: true });
       setActiveTab("courses");
@@ -450,5 +450,13 @@ export default function ParentDashboard() {
         </>
       )}
     </div>
+  );
+}
+
+export default function ParentDashboard() {
+  return (
+    <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center"><div className="text-4xl animate-bounce">🌱</div></div>}>
+      <ParentDashboardInner />
+    </Suspense>
   );
 }
