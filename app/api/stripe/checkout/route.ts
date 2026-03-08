@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     // Step 4: Fetch course
     const { data: course, error: courseError } = await supabase
       .from("courses")
-      .select("id, title, price_cents, stripe_price_id, thumbnail_url")
+      .select("id, title, price_cents, stripe_price_id")
       .eq("id", courseId)
       .maybeSingle();
 
