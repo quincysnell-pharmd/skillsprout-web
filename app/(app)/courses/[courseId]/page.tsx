@@ -1,365 +1,323 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
 
-// ── TYPES ─────────────────────────────────────────────────────
-type Level    = "seedling" | "sprout" | "bloom" | "harvest" | string;
-type Category = "all" | "cooking" | "coding" | "gardening" | "money" | "art";
-type UserRole = "child" | "parent" | "unknown";
-
-type Course = {
+interface Course {
   id: string;
   title: string;
   emoji?: string;
-  category: Exclude<Category, "all">;
-  level: Level;
-  age_min?: number;
-  age_max?: number;
-  lesson_count?: number;
-  description: string;
+  description?: string;
+  category?: string;
+  level?: string;
   bg?: string;
-  final_project?: string;
-  prerequisites?: string[];
-  topics?: string[];
-  is_free?: boolean;
-  price_cents?: number;
-  is_published?: boolean;
-  slug?: string;
-};
-
-// ── FALLBACK DATA ─────────────────────────────────────────────
-const FALLBACK_COURSES: Course[] = [
-  {
-    id: "cooking-seedling", title: "Kitchen Basics", emoji: "🍳",
-    category: "cooking", level: "seedling", age_min: 6, age_max: 9,
-    lesson_count: 6, is_free: true, price_cents: 0,
-    description: "Your very first kitchen adventure! Learn to stay safe, use basic tools, and cook real food.",
-    bg: "from-yellow-50 to-orange-100",
-    final_project: "Cook a 2-course meal for your family!",
-    prerequisites: ["No cooking experience needed!"],
-    topics: ["Kitchen safety", "Basic knife skills", "Boiling water & pasta", "Simple salad", "Scrambled eggs", "Final project"],
-  },
-  {
-    id: "coding-seedling", title: "My First Code", emoji: "💻",
-    category: "coding", level: "seedling", age_min: 7, age_max: 10,
-    lesson_count: 8, is_free: true, price_cents: 0,
-    description: "Discover coding with Scratch! Build your first animated story and game.",
-    bg: "from-blue-50 to-indigo-100",
-    final_project: "Build a game in Scratch!",
-    prerequisites: ["No coding experience needed"],
-    topics: ["What is code?", "Scratch basics", "Make characters move", "Add sounds", "Build a game", "Final project"],
-  },
-  {
-    id: "money-sprout", title: "Money Smarts", emoji: "💰",
-    category: "money", level: "sprout", age_min: 9, age_max: 13,
-    lesson_count: 7, is_free: false, price_cents: 499,
-    description: "Learn the basics of money — where it comes from and how to save it.",
-    bg: "from-yellow-50 to-amber-100",
-    final_project: "Create your personal budget and savings plan!",
-    prerequisites: ["Basic math skills"],
-    topics: ["What is money?", "Earning", "Needs vs wants", "Budgeting", "Saving", "Goals", "Final project"],
-  },
-];
-
-// ── LEVEL CONFIG ──────────────────────────────────────────────
-const LEVEL_CONFIG: Record<string, { label: string; emoji: string; color: string; bg: string; description: string }> = {
-  seedling:  { label: "Seedling",  emoji: "🌱", color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", description: "Complete beginner" },
-  sprout:    { label: "Sprout",    emoji: "🌿", color: "text-green-700",   bg: "bg-green-50 border-green-200",     description: "Some experience" },
-  bloom:     { label: "Bloom",     emoji: "🌸", color: "text-sky-700",     bg: "bg-sky-50 border-sky-200",         description: "Getting confident" },
-  harvest:   { label: "Harvest",   emoji: "🌻", color: "text-amber-700",   bg: "bg-amber-50 border-amber-200",     description: "Advanced learner" },
-  seed:      { label: "Seed",      emoji: "🌱", color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", description: "Complete beginner" },
-  sapling:   { label: "Sapling",   emoji: "🌿", color: "text-green-700",   bg: "bg-green-50 border-green-200",     description: "Some experience" },
-  tree:      { label: "Tree",      emoji: "🌳", color: "text-sky-700",     bg: "bg-sky-50 border-sky-200",         description: "Getting confident" },
-  forest:    { label: "Forest",    emoji: "🌲", color: "text-teal-700",    bg: "bg-teal-50 border-teal-200",       description: "Advanced learner" },
-  ecosystem: { label: "Ecosystem", emoji: "🌍", color: "text-amber-700",   bg: "bg-amber-50 border-amber-200",     description: "Expert" },
-};
-
-const FALLBACK_LEVEL = { label: "Beginner", emoji: "📚", color: "text-slate-700", bg: "bg-slate-50 border-slate-200", description: "" };
-
-const CATEGORY_FILTERS: { key: Category; label: string }[] = [
-  { key: "all",       label: "All Courses" },
-  { key: "cooking",   label: "🍳 Cooking"   },
-  { key: "coding",    label: "💻 Coding"    },
-  { key: "gardening", label: "🌱 Gardening" },
-  { key: "money",     label: "💰 Money"     },
-  { key: "art",       label: "🎨 Art"       },
-];
-
-// ── COMPONENTS ────────────────────────────────────────────────
-function LevelPill({ level }: { level: Level }) {
-  const cfg = LEVEL_CONFIG[level] ?? FALLBACK_LEVEL;
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-bold ${cfg.bg} ${cfg.color}`}>
-      {cfg.emoji} {cfg.label}
-    </span>
-  );
+  price_cents: number;
 }
 
-function CourseCard({
-  course, enrolled, paid, requested, role, onRequest, onClick,
-}: {
-  course: Course;
-  enrolled: boolean;
+interface Lesson {
+  id: string;
+  title: string;
+  description?: string;
+  order_index: number;
+  xp_reward: number;
+  is_published: boolean;
+  video_url?: string;
+  content?: string;
+  quiz_question_count?: number;
+}
+
+interface LessonProgress {
+  lesson_id: string;
+  completed: boolean;
+  quiz_score?: number;
+}
+
+interface EnrollmentRow {
+  id?: string;
   paid: boolean;
-  requested: boolean;
-  role: UserRole;
-  onRequest: () => void;
-  onClick: () => void;
-}) {
-  const price = ((course.price_cents ?? 0) / 100).toFixed(2);
-  const isLocked = role === "child" && !paid;
-
-  return (
-    <button
-      onClick={onClick}
-      className="group flex flex-col overflow-hidden rounded-2xl border-2 border-transparent bg-white text-left shadow-sm transition hover:-translate-y-1 hover:border-emerald-100 hover:shadow-lg"
-    >
-      <div className={`relative flex h-32 items-center justify-center bg-gradient-to-br ${course.bg ?? "from-slate-50 to-slate-100"}`}>
-        <span className="text-6xl">{course.emoji ?? "📚"}</span>
-        {isLocked && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/10 rounded-t-2xl">
-            <span className="text-3xl">🔒</span>
-          </div>
-        )}
-      </div>
-      <div className="flex flex-1 flex-col p-5">
-        <div className="flex flex-wrap items-center gap-2">
-          <LevelPill level={course.level} />
-          {paid && <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">✅ Unlocked</span>}
-          {role === "child" && !paid && requested && <span className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">⏳ Requested</span>}
-          {role === "parent" && <span className="rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-700">Preview</span>}
-        </div>
-        <h3 className="font-display mt-3 text-lg font-bold text-emerald-900">{course.title}</h3>
-        <p className="mt-1.5 flex-1 text-sm font-semibold leading-relaxed text-slate-500">{course.description}</p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {course.age_min && <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">Ages {course.age_min}–{course.age_max}</span>}
-          {course.lesson_count && <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">{course.lesson_count} lessons</span>}
-          {(course.price_cents ?? 0) > 0
-            ? <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">${price}</span>
-            : <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Free</span>}
-        </div>
-
-        {/* Child: request button if not paid */}
-        {role === "child" && !paid && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onRequest(); }}
-            disabled={requested}
-            className={`mt-4 w-full rounded-xl py-2.5 text-sm font-bold transition ${
-              requested
-                ? "bg-amber-100 text-amber-600 cursor-default"
-                : "bg-violet-600 text-white hover:bg-violet-700"
-            }`}
-          >
-            {requested ? "⏳ Request Sent" : "🙋 Request This Course"}
-          </button>
-        )}
-
-        {/* Parent: view details */}
-        {role === "parent" && (
-          <div className="mt-4 text-sm font-bold text-violet-600 group-hover:text-violet-800">Preview course →</div>
-        )}
-
-        {/* Child: paid */}
-        {role === "child" && paid && (
-          <div className="mt-4 text-sm font-bold text-emerald-600 group-hover:text-emerald-800">
-            {enrolled ? "Continue learning →" : "Start course →"}
-          </div>
-        )}
-      </div>
-    </button>
-  );
+  progress_pct: number;
 }
 
-// ── MAIN PAGE ─────────────────────────────────────────────────
-export default function CoursesPage() {
-  const supabase = supabaseBrowser();
+export default function CourseOverviewPage() {
+  const params   = useParams();
   const router   = useRouter();
+  const supabase = supabaseBrowser();
+  const courseId = params.courseId as string;
 
-  const [courses, setCourses]         = useState<Course[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [category, setCategory]       = useState<Category>("all");
-  const [enrolledIds, setEnrolledIds] = useState<Set<string>>(new Set());
-  const [paidIds, setPaidIds]         = useState<Set<string>>(new Set());
-  const [requestedIds, setRequestedIds] = useState<Set<string>>(new Set());
+  const [course, setCourse]           = useState<Course | null>(null);
+  const [lessons, setLessons]         = useState<Lesson[]>([]);
+  const [progress, setProgress]       = useState<Map<string, LessonProgress>>(new Map());
   const [childId, setChildId]         = useState<string | null>(null);
   const [isLinked, setIsLinked]       = useState(false);
-  const [role, setRole]               = useState<UserRole>("unknown");
-  const [requestMsg, setRequestMsg]   = useState<string | null>(null);
+  const [isParent, setIsParent]       = useState(false);
+  const [enrollment, setEnrollment]   = useState<EnrollmentRow | null>(null);
+  const [loading, setLoading]         = useState(true);
 
-  useEffect(() => {
-    loadCourses();
-    detectUserAndLoad();
-  }, []);
+  useEffect(() => { if (courseId) loadData(); }, [courseId]);
 
-  async function loadCourses() {
+  async function loadData() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("courses").select("*").eq("is_published", true).order("created_at", { ascending: true });
-    if (error || !data || data.length === 0) {
-      setCourses(FALLBACK_COURSES);
-    } else {
-      setCourses(data as Course[]);
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const [{ data: courseData }, { data: lessonData }] = await Promise.all([
+      supabase.from("courses").select("*").eq("id", courseId).maybeSingle(),
+      supabase.from("lessons").select("*").eq("course_id", courseId).eq("is_published", true).order("order_index"),
+    ]);
+
+    setCourse(courseData as Course);
+    setLessons((lessonData as Lesson[]) ?? []);
+
+    if (user) {
+      // Check if parent — if so, mark as linked and paid so they see the full preview
+      const { data: parentRow } = await supabase
+        .from("parents").select("id").eq("user_id", user.id).maybeSingle();
+      if (parentRow) {
+        setIsLinked(true);
+        setIsParent(true);
+        setEnrollment({ paid: true, progress_pct: 0 });
+        setLoading(false);
+        return;
+      }
+
+      const { data: childRow } = await supabase
+        .from("child_profiles").select("id, parent_id").eq("user_id", user.id).maybeSingle();
+      if (childRow) {
+        setChildId(childRow.id);
+        setIsLinked(!!childRow.parent_id);
+
+        // Check enrollment (includes paid status)
+        const { data: enrollRow } = await supabase
+          .from("enrollments")
+          .select("id, paid, progress_pct")
+          .eq("child_id", childRow.id)
+          .eq("course_id", courseId)
+          .maybeSingle();
+        setEnrollment(enrollRow as EnrollmentRow ?? null);
+
+        // Load lesson progress
+        const { data: progressData } = await supabase
+          .from("lesson_progress").select("*").eq("child_id", childRow.id)
+          .in("lesson_id", (lessonData ?? []).map((l: Lesson) => l.id));
+
+        const map = new Map<string, LessonProgress>();
+        (progressData ?? []).forEach((p: LessonProgress) => map.set(p.lesson_id, p));
+        setProgress(map);
+      }
     }
     setLoading(false);
   }
 
-  async function detectUserAndLoad() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    // Check if parent
-    const { data: parentRow } = await supabase
-      .from("parents").select("id").eq("user_id", user.id).maybeSingle();
-    if (parentRow) {
-      setRole("parent");
-      return;
-    }
-
-    // Check if child
-    const { data: childRow } = await supabase
-      .from("child_profiles").select("id, parent_id").eq("user_id", user.id).maybeSingle();
-    if (!childRow) return;
-
-    setRole("child");
-    setChildId(childRow.id);
-    setIsLinked(!!childRow.parent_id);
-
-    // Load enrollments + paid status
-    const { data: enrollments } = await supabase
-      .from("enrollments").select("course_id, paid").eq("child_id", childRow.id);
-    const enrolled = new Set<string>();
-    const paid     = new Set<string>();
-    (enrollments ?? []).forEach((e: { course_id: string; paid: boolean }) => {
-      enrolled.add(e.course_id);
-      if (e.paid) paid.add(e.course_id);
-    });
-    setEnrolledIds(enrolled);
-    setPaidIds(paid);
-
-    // Load course requests
-    const { data: requests } = await supabase
-      .from("course_requests").select("course_id").eq("child_id", childRow.id).eq("status", "pending");
-    setRequestedIds(new Set((requests ?? []).map((r: { course_id: string }) => r.course_id)));
+  function isLocked(lesson: Lesson, index: number): boolean {
+    if (!enrollment?.paid) return true; // whole course locked if not paid
+    if (index === 0) return false;
+    const prev = lessons[index - 1];
+    const prevProgress = progress.get(prev.id);
+    return !prevProgress?.completed;
   }
 
-  async function handleRequest(courseId: string) {
-    if (!childId) { router.push("/auth"); return; }
+  function getStatus(lesson: Lesson) {
+    const p = progress.get(lesson.id);
+    if (!p) return "not_started";
+    if (p.completed) return "completed";
+    return "in_progress";
+  }
 
+  function completedCount() {
+    return lessons.filter((l) => progress.get(l.id)?.completed).length;
+  }
+
+  if (loading) return (
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="text-5xl animate-bounce">📚</div>
+    </div>
+  );
+
+  if (!course) return (
+    <div className="text-center py-20">
+      <p className="font-bold text-slate-400">Course not found.</p>
+      <button onClick={() => router.push("/courses")} className="mt-4 text-emerald-600 font-bold hover:underline">← Back to courses</button>
+    </div>
+  );
+
+  const isPaid  = enrollment?.paid === true;
+  const pct     = lessons.length > 0 ? Math.round((completedCount() / lessons.length) * 100) : 0;
+  const totalXP = lessons.reduce((sum, l) => sum + (l.xp_reward ?? 0), 0);
+  const price   = ((course.price_cents ?? 999) / 100).toFixed(2);
+
+  // ── PAYMENT GATE ──────────────────────────────────────────────
+  if (!isPaid) {
+    // Not linked to a parent at all
     if (!isLinked) {
-      setRequestMsg("You need to be linked to a parent account before you can request courses. Ask your parent to link you!");
-      setTimeout(() => setRequestMsg(null), 4000);
-      return;
-    }
-
-    await supabase.from("course_requests").upsert(
-      { child_id: childId, course_id: courseId, status: "pending", updated_at: new Date().toISOString() },
-      { onConflict: "child_id,course_id" }
-    );
-    setRequestedIds(prev => new Set([...prev, courseId]));
-    setRequestMsg("✅ Request sent! Your parent will be notified.");
-    setTimeout(() => setRequestMsg(null), 3000);
-  }
-
-  function handleCourseClick(course: Course) {
-    if (role === "parent") {
-      // Show course detail as preview — navigate to detail page
-      router.push(`/courses/${course.id}`);
-      return;
-    }
-    if (role === "child" && paidIds.has(course.id)) {
-      router.push(`/courses/${course.id}`);
-      return;
-    }
-    // Child not paid — don't navigate, request button handles it
-  }
-
-  const filtered = courses.filter((c) => category === "all" || c.category === category);
-
-  return (
-    <div className="space-y-8">
-      {/* Header */}
-      <section className="relative overflow-hidden rounded-3xl border border-emerald-100 bg-white p-8 shadow-sm">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-52 w-52 rounded-full bg-emerald-100/50 blur-3xl" />
-        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800">📚 Project-based courses</span>
-        <h1 className="font-display mt-4 text-4xl font-bold text-emerald-900 md:text-5xl">Browse Courses</h1>
-        <p className="mt-2 max-w-xl text-base font-semibold text-slate-500">
-          {role === "parent"
-            ? "Preview courses and unlock them for your children from your dashboard."
-            : "From Seedling to Harvest — find the right level for you!"}
-        </p>
-        {role === "parent" && (
-          <button
-            onClick={() => router.push("/parent/dashboard")}
-            className="mt-4 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-violet-700 transition"
-          >
-            Go to Parent Dashboard →
-          </button>
-        )}
-      </section>
-
-      {/* Request message */}
-      {requestMsg && (
-        <div className={`rounded-2xl border px-5 py-4 text-sm font-bold ${
-          requestMsg.startsWith("✅") ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"
-        }`}>
-          {requestMsg}
-        </div>
-      )}
-
-      {/* Child not linked banner */}
-      {role === "child" && !isLinked && (
-        <div className="rounded-2xl border-2 border-amber-200 bg-amber-50 p-5 flex items-start gap-4">
-          <span className="text-3xl">🔗</span>
-          <div>
-            <p className="font-bold text-amber-900">You're not linked to a parent account yet</p>
-            <p className="text-sm font-semibold text-amber-700 mt-0.5">Ask your parent to link your account so they can unlock courses for you.</p>
+      return (
+        <div className="max-w-md mx-auto mt-16 px-4 space-y-4">
+          <button onClick={() => router.push("/courses")}
+            className="text-sm font-bold text-slate-500 hover:text-emerald-600 transition">← Back to Courses</button>
+          <div className="rounded-3xl border-2 border-amber-300 bg-amber-50 p-8 text-center space-y-5">
+            <div className="text-6xl">🔗</div>
+            <h2 className="font-display text-2xl font-black text-amber-900">Almost there!</h2>
+            <p className="text-sm font-semibold text-amber-700 leading-relaxed">
+              To unlock <span className="font-black">{course.title}</span>, you need to be linked to a parent account first.
+            </p>
+            <div className="rounded-2xl border border-amber-200 bg-white p-5 text-left space-y-2">
+              <p className="text-xs font-black text-amber-800 uppercase tracking-wide">Ask your parent to:</p>
+              <div className="space-y-1.5 text-sm font-semibold text-amber-700">
+                <p>1. Create a SkillSprout parent account</p>
+                <p>2. Link your profile to their account</p>
+                <p>3. Unlock this course for you</p>
+              </div>
+            </div>
           </div>
         </div>
+      );
+    }
+
+    // Linked but not paid
+    return (
+      <div className="max-w-md mx-auto mt-16 px-4 space-y-4">
+        <button onClick={() => router.push("/courses")}
+          className="text-sm font-bold text-slate-500 hover:text-emerald-600 transition">← Back to Courses</button>
+        <div className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${course.bg ?? "from-emerald-400 to-teal-600"} p-8 text-white text-center space-y-3 shadow-lg`}>
+          <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
+          <div className="text-6xl">{course.emoji ?? "📚"}</div>
+          <h2 className="font-display text-2xl font-black">{course.title}</h2>
+          {course.description && <p className="text-white/80 text-sm font-semibold">{course.description}</p>}
+          <div className="flex justify-center flex-wrap gap-2 mt-2">
+            {course.level && <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold capitalize">{course.level}</span>}
+            <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold">{lessons.length} lessons</span>
+            <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold">⭐ {totalXP} XP total</span>
+          </div>
+        </div>
+        <div className="rounded-3xl border-2 border-violet-300 bg-violet-50 p-8 text-center space-y-5">
+          <div className="text-5xl">🔒</div>
+          <h3 className="font-display text-xl font-black text-violet-900">Course Locked</h3>
+          <div className="rounded-2xl border border-violet-200 bg-white px-6 py-4 inline-block">
+            <span className="text-3xl font-black text-violet-800">${price}</span>
+            <span className="text-sm font-bold text-violet-500 ml-1">one-time</span>
+          </div>
+          <div className="rounded-2xl border border-violet-200 bg-white p-5 text-left space-y-2">
+            <p className="text-xs font-black text-violet-800 uppercase tracking-wide">Ask your parent to:</p>
+            <div className="space-y-1.5 text-sm font-semibold text-violet-700">
+              <p>1. Sign in to their SkillSprout account</p>
+              <p>2. Go to their Parent Dashboard → Courses tab</p>
+              <p>3. Click "Unlock" next to <span className="font-black">{course.title}</span></p>
+            </div>
+          </div>
+          <p className="text-xs font-semibold text-violet-400">Your progress will be saved once unlocked 🌱</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── FULL COURSE VIEW (paid) ───────────────────────────────────
+  return (
+    <div className="max-w-2xl mx-auto space-y-6 py-6 px-4">
+      {/* Parent preview banner */}
+      {isParent && (
+        <div className="rounded-2xl border-2 border-violet-200 bg-violet-50 px-5 py-3 flex items-center justify-between gap-4">
+          <p className="text-sm font-bold text-violet-800">👀 You're previewing this course as a parent. Go to your dashboard to unlock it for a child.</p>
+          <button onClick={() => router.push("/dashboard/parent")}
+            className="shrink-0 rounded-xl bg-violet-600 px-4 py-2 text-xs font-bold text-white hover:bg-violet-700 transition">
+            Dashboard →
+          </button>
+        </div>
       )}
 
-      {/* Category filters */}
-      <div className="flex flex-wrap gap-2">
-        {CATEGORY_FILTERS.map((f) => (
-          <button key={f.key} onClick={() => setCategory(f.key)}
-            className={`rounded-xl border-2 px-4 py-2 text-sm font-bold transition ${
-              category === f.key
-                ? "border-emerald-500 bg-emerald-500 text-white"
-                : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50"
-            }`}>
-            {f.label}
-          </button>
-        ))}
+      {/* Back */}
+      <button onClick={() => router.push("/courses")}
+        className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-emerald-600 transition">
+        ← Back to Courses
+      </button>
+
+      {/* Course hero */}
+      <div className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${course.bg ?? "from-emerald-400 to-teal-600"} p-8 text-white shadow-lg`}>
+        <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
+        <div className="text-6xl mb-4">{course.emoji ?? "📚"}</div>
+        <h1 className="font-display text-3xl font-black">{course.title}</h1>
+        {course.description && <p className="mt-2 text-white/80 font-semibold text-sm max-w-md">{course.description}</p>}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {course.category && <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold capitalize">{course.category}</span>}
+          {course.level && <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold capitalize">{course.level}</span>}
+          <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold">{lessons.length} lessons</span>
+          <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold">⭐ {totalXP} XP total</span>
+        </div>
+
+        {lessons.length > 0 && (
+          <div className="mt-5">
+            <div className="flex justify-between text-xs font-bold text-white/80 mb-1.5">
+              <span>{completedCount()} of {lessons.length} lessons complete</span>
+              <span>{pct}%</span>
+            </div>
+            <div className="h-2.5 rounded-full bg-white/20 overflow-hidden">
+              <div className="h-full rounded-full bg-white transition-all duration-700" style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Course grid */}
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="text-4xl animate-bounce">📚</div>
-        </div>
-      ) : (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((course) => (
-            <CourseCard
-              key={course.id}
-              course={course}
-              enrolled={enrolledIds.has(course.id)}
-              paid={paidIds.has(course.id)}
-              requested={requestedIds.has(course.id)}
-              role={role}
-              onRequest={() => handleRequest(course.id)}
-              onClick={() => handleCourseClick(course)}
-            />
-          ))}
-          {filtered.length === 0 && (
-            <div className="col-span-3 rounded-2xl border border-slate-100 bg-white p-12 text-center">
-              <div className="text-5xl">🌱</div>
-              <p className="mt-3 font-display text-lg font-bold text-slate-400">More courses coming soon!</p>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Lessons list */}
+      <div className="space-y-3">
+        <h2 className="font-display text-xl font-bold text-slate-900">Lessons</h2>
+        {lessons.length === 0 ? (
+          <div className="rounded-2xl border border-slate-100 bg-white p-10 text-center">
+            <div className="text-4xl mb-3">🔜</div>
+            <p className="font-bold text-slate-400">Lessons coming soon!</p>
+          </div>
+        ) : (
+          lessons.map((lesson, i) => {
+            const locked = isLocked(lesson, i);
+            const status = getStatus(lesson);
+            const p = progress.get(lesson.id);
+
+            return (
+              <button
+                key={lesson.id}
+                onClick={() => {
+                  if (locked) return;
+                  router.push(`/courses/${courseId}/lessons/${lesson.id}`);
+                }}
+                disabled={locked}
+                className={`w-full flex items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
+                  locked
+                    ? "border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed"
+                    : status === "completed"
+                    ? "border-emerald-200 bg-emerald-50 hover:shadow-md hover:-translate-y-0.5"
+                    : "border-slate-200 bg-white hover:border-emerald-200 hover:shadow-md hover:-translate-y-0.5"
+                }`}
+              >
+                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-lg font-black ${
+                  locked ? "bg-slate-200 text-slate-400"
+                  : status === "completed" ? "bg-emerald-500 text-white"
+                  : "bg-violet-100 text-violet-700"
+                }`}>
+                  {locked ? "🔒" : status === "completed" ? "✓" : i + 1}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-slate-900">{lesson.title}</div>
+                  {lesson.description && <div className="text-xs font-semibold text-slate-400 mt-0.5 truncate">{lesson.description}</div>}
+                  <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                    {lesson.video_url && <span className="text-xs font-semibold text-slate-500">🎬 Video</span>}
+                    {lesson.content && <span className="text-xs font-semibold text-slate-500">📝 Reading</span>}
+                    {(lesson.quiz_question_count ?? 0) > 0 && <span className="text-xs font-semibold text-slate-500">⚡ {lesson.quiz_question_count}-question quiz</span>}
+                    <span className="text-xs font-bold text-amber-600">⭐ {lesson.xp_reward} XP</span>
+                    {status === "completed" && p?.quiz_score !== undefined && (
+                      <span className="text-xs font-bold text-emerald-600">Quiz: {p.quiz_score}%</span>
+                    )}
+                  </div>
+                </div>
+
+                {!locked && status !== "completed" && (
+                  <div className="shrink-0 text-emerald-600 font-bold text-sm">Start →</div>
+                )}
+                {status === "completed" && (
+                  <div className="shrink-0 text-xs font-bold text-emerald-600">Review →</div>
+                )}
+              </button>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
