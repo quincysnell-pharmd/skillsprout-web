@@ -141,9 +141,9 @@ export default function CourseOverviewPage() {
       });
       const data = await res.json();
       if (data.url) { window.location.href = data.url; }
-      else { alert("Something went wrong. Please try again."); }
-    } catch {
-      alert("Something went wrong. Please try again.");
+      else { alert("Error: " + (data.error ?? "Something went wrong. Please try again.")); }
+    } catch (err) {
+      alert("Error: " + (err instanceof Error ? err.message : "Something went wrong."));
     }
     setUnlocking(false);
   }
@@ -289,7 +289,7 @@ export default function CourseOverviewPage() {
             {children.length === 0 ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center space-y-3">
                 <p className="text-sm font-bold text-amber-800">You don't have any children linked yet.</p>
-                <button onClick={() => router.push("/dashboard/parent")}
+                <button onClick={() => router.push("/parent/dashboard")}
                   className="rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-amber-600 transition">
                   Go to Dashboard to Link a Child →
                 </button>
