@@ -260,12 +260,18 @@ function ParentDashboardInner() {
 
   async function loadData() {
     setLoading(true);
-    // Retry auth up to 3 times — needed after Stripe redirect which can delay session restore
+    // Use getSession first (faster after redirects), fall back to getUser
     let user = null;
-    for (let i = 0; i < 3; i++) {
-      const { data } = await supabase.auth.getUser();
-      if (data.user) { user = data.user; break; }
-      await new Promise(r => setTimeout(r, 600));
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData?.session?.user) {
+      user = sessionData.session.user;
+    } else {
+      // Retry with getUser up to 5 times
+      for (let i = 0; i < 5; i++) {
+        const { data } = await supabase.auth.getUser();
+        if (data.user) { user = data.user; break; }
+        await new Promise(r => setTimeout(r, 800));
+      }
     }
     if (!user) { router.replace("/auth"); return; }
 
