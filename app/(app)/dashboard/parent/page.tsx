@@ -196,7 +196,7 @@ function CoursesTab({ children, courses, enrollments, requests, parentId, onRefr
                       </div>
                       <div className="shrink-0 flex items-center gap-2">
                         {isPaid ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-black text-emerald-700">✅ Unlocked</span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-black text-emerald-700">✅ Purchased</span>
                         ) : (
                           <button onClick={() => handleUnlock(course.id, child.id, request?.id)} disabled={isLoading}
                             className={`rounded-xl px-3 py-2 text-xs font-bold text-white disabled:opacity-60 transition ${request ? "bg-emerald-600 hover:bg-emerald-700" : "bg-violet-600 hover:bg-violet-700"}`}>
@@ -243,18 +243,28 @@ function ParentDashboardInner() {
   const pendingRequestCount = requests.filter(r => r.status === "pending").length;
 
   useEffect(() => {
-    loadData();
     const params   = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
     const payment  = params.get("payment");
     const courseId = params.get("course");
     const childId  = params.get("child");
     if (payment === "success" && courseId && childId) {
-      setMsg({ text: "🎉 Course unlocked! Your child can now start learning.", ok: true });
-      setActiveTab("courses");
-      router.replace("/dashboard/parent");
+      // Manually mark enrollment as paid in case webhook was slow
+      const supabaseAdmin = supabaseBrowser();
+      supabaseAdmin.from("enrollments").upsert(
+        { child_id: childId, course_id: courseId, paid: true, progress_pct: 0, updated_at: new Date().toISOString(), enrolled_at: new Date().toISOString() },
+        { onConflict: "child_id,course_id" }
+      ).then(() => {
+        setMsg({ text: "🎉 Course unlocked! Your child can now start learning.", ok: true });
+        setActiveTab("courses");
+        router.replace("/dashboard/parent");
+        loadData();
+      });
     } else if (payment === "cancelled") {
       setMsg({ text: "Payment was cancelled. No charge was made.", ok: false });
       router.replace("/dashboard/parent");
+      loadData();
+    } else {
+      loadData();
     }
   }, []);
 
