@@ -64,8 +64,8 @@ export async function POST(req: NextRequest) {
       sessionParams = {
         mode: "payment",
         line_items: [{ price: course.stripe_price_id, quantity: 1 }],
-        success_url: `${appUrl}/dashboard/parent?payment=success&course=${courseId}&child=${childId}`,
-        cancel_url: `${appUrl}/dashboard/parent?payment=cancelled`,
+        success_url: `${appUrl}/payment/success?course=${courseId}&child=${childId}`,
+        cancel_url: `${appUrl}/courses?payment=cancelled`,
         metadata: { courseId, childId, parentId },
       };
     } else {
@@ -82,8 +82,8 @@ export async function POST(req: NextRequest) {
           },
           quantity: 1,
         }],
-        success_url: `${appUrl}/dashboard/parent?payment=success&course=${courseId}&child=${childId}`,
-        cancel_url: `${appUrl}/dashboard/parent?payment=cancelled`,
+        success_url: `${appUrl}/payment/success?course=${courseId}&child=${childId}`,
+        cancel_url: `${appUrl}/courses?payment=cancelled`,
         metadata: { courseId, childId, parentId },
       };
     }
