@@ -289,7 +289,7 @@ export default function CourseOverviewPage() {
             {children.length === 0 ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center space-y-3">
                 <p className="text-sm font-bold text-amber-800">You don't have any children linked yet.</p>
-                <button onClick={() => router.push("/parent/dashboard")}
+                <button onClick={() => router.push("/dashboard/parent")}
                   className="rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-amber-600 transition">
                   Go to Dashboard to Link a Child →
                 </button>

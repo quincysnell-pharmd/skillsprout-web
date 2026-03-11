@@ -251,10 +251,10 @@ function ParentDashboardInner() {
     if (payment === "success" && courseId && childId) {
       setMsg({ text: "🎉 Course unlocked! Your child can now start learning.", ok: true });
       setActiveTab("courses");
-      router.replace("/parent/dashboard");
+      router.replace("/dashboard/parent");
     } else if (payment === "cancelled") {
       setMsg({ text: "Payment was cancelled. No charge was made.", ok: false });
-      router.replace("/parent/dashboard");
+      router.replace("/dashboard/parent");
     }
   }, []);
 
