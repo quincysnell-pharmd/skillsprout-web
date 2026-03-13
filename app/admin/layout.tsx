@@ -34,10 +34,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   const navItems = [
-    { label: "Courses",       href: "/admin/courses",       emoji: "📚" },
-    { label: "Community",     href: "/admin/community",     emoji: "🌱" },
-    { label: "Careers",       href: "/admin/careers",       emoji: "💼" },
-    { label: "Users",         href: "/admin/users",         emoji: "👥" },
+    { label: "Courses",    href: "/admin/courses",    emoji: "📚" },
+    { label: "Challenges", href: "/admin/challenges", emoji: "⚡" },
+    { label: "Community",  href: "/admin/community",  emoji: "🌱" },
+    { label: "Careers",    href: "/admin/careers",    emoji: "💼" },
+    { label: "Users",      href: "/admin/users",      emoji: "👥" },
     { label: "Announcements", href: "/admin/announcements", emoji: "📣" },
   ];
 
