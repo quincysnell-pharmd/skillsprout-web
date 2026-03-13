@@ -108,9 +108,11 @@ export default function AdminCareersPage() {
       required_skills: form.required_skills.filter(s => s.trim()),
     };
     if (editing) {
-      await supabase.from("careers").update(clean).eq("id", editing.id);
+      const { error } = await supabase.from("careers").update(clean).eq("id", editing.id);
+      if (error) { alert("Save error: " + error.message); setBusy(false); return; }
     } else {
-      await supabase.from("careers").insert({ ...clean, order_index: careers.length });
+      const { error } = await supabase.from("careers").insert({ ...clean, order_index: careers.length });
+      if (error) { alert("Save error: " + error.message); setBusy(false); return; }
     }
     await loadData();
     setEditing(null);
