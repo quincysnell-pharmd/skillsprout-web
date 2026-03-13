@@ -300,7 +300,6 @@ function ParentDashboardInner() {
       .select("id, title, emoji, level, price_cents, stripe_price_id, is_published")
       .eq("is_published", true).order("created_at", { ascending: true });
     setCourses((courseData as Course[]) ?? []);
-    console.log("Courses loaded:", courseData?.length, courseData);
 
     if (childList.length > 0) {
       const childIds = childList.map(c => c.id);

@@ -663,9 +663,16 @@ export default function LessonStepPlayerPage() {
     setLesson(lo);
     setSteps(st);
 
-    // Load completed steps
-    const { data: prog } = await supabase.from("lesson_step_progress").select("step_id").eq("child_id", cr.id).eq("completed", true).in("step_id", st.map(s => s.id));
+    // Load completed steps and saved position
+    const [{ data: prog }, { data: savedPos }] = await Promise.all([
+      supabase.from("lesson_step_progress").select("step_id").eq("child_id", cr.id).eq("completed", true).in("step_id", st.map(s => s.id)),
+      supabase.from("lesson_progress").select("current_step_index").eq("child_id", cr.id).eq("lesson_id", lessonId).maybeSingle(),
+    ]);
     setCompleted(new Set((prog ?? []).map((p: { step_id: string }) => p.step_id)));
+    // Resume from saved position
+    if (savedPos?.current_step_index && savedPos.current_step_index < st.length) {
+      setCurrentIdx(savedPos.current_step_index);
+    }
 
     // Load next lesson
     if (lo) {
@@ -679,6 +686,15 @@ export default function LessonStepPlayerPage() {
   function markComplete(stepId: string) {
     setCompleted(prev => new Set([...prev, stepId]));
   }
+
+  // Save current step position whenever it changes
+  useEffect(() => {
+    if (!childId || !lessonId) return;
+    supabase.from("lesson_progress").upsert(
+      { child_id: childId, lesson_id: lessonId, current_step_index: currentIdx, completed: false },
+      { onConflict: "child_id,lesson_id" }
+    );
+  }, [currentIdx, childId]);
 
   async function finishLesson() {
     if (!childId || !lesson) return;

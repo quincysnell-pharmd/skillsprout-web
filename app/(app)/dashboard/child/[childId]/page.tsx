@@ -302,7 +302,8 @@ export default function ChildDashboard() {
               ) : (
                 <div className="space-y-3">
                   {enrollments.slice(0, 3).map((e) => (
-                    <div key={e.id} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                    <a key={e.id} href={`/courses/${e.course_id}`}
+                      className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 hover:border-emerald-200 hover:bg-emerald-50 transition group">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white border border-slate-200 text-xl shadow-sm">
                         {e.courses.emoji ?? "📚"}
                       </div>
@@ -315,7 +316,10 @@ export default function ChildDashboard() {
                           <span className="text-xs font-black text-emerald-600 shrink-0">{e.progress_pct}%</span>
                         </div>
                       </div>
-                    </div>
+                      <span className="text-xs font-bold text-emerald-600 group-hover:text-emerald-800 shrink-0">
+                        {e.progress_pct > 0 ? "Continue →" : "Start →"}
+                      </span>
+                    </a>
                   ))}
                 </div>
               )}
