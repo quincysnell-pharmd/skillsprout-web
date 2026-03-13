@@ -278,6 +278,7 @@ export default function ChildDashboard() {
               {[
                 { href: "/explore",   icon: "⚡", label: "Daily Challenge", color: "from-amber-50 to-orange-50 border-amber-100 hover:border-amber-300"     },
                 { href: "/courses",   icon: "📚", label: "Courses",         color: "from-emerald-50 to-teal-50 border-emerald-100 hover:border-emerald-300" },
+                { href: "/challenges", icon: "⚡", label: "Daily Challenges", color: "from-violet-50 to-indigo-50 border-violet-100 hover:border-violet-300" },
                 { href: "/futures",   icon: "🚀", label: "Futures",         color: "from-sky-50 to-indigo-50 border-sky-100 hover:border-sky-300"           },
               ].map(({ href, icon, label, color }) => (
                 <a key={href} href={href}

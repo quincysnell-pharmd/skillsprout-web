@@ -7,10 +7,12 @@ interface Career {
   id: string;
   title: string;
   emoji: string;
+  image_url?: string;
   description: string;
   brief: string;
   salary_min: number;
   salary_max: number;
+  salary_avg: number;
   outlook: string;
   pros: string[];
   cons: string[];
@@ -23,8 +25,8 @@ interface Career {
 interface Course { id: string; title: string; emoji?: string; }
 
 const BLANK: Omit<Career, "id"> = {
-  title: "", emoji: "💼", description: "", brief: "",
-  salary_min: 0, salary_max: 0, outlook: "growing",
+  title: "", emoji: "💼", image_url: "", description: "", brief: "",
+  salary_min: 0, salary_max: 0, salary_avg: 0, outlook: "growing",
   pros: [""], cons: [""], required_skills: [""], course_ids: [],
   is_published: false, order_index: 0,
 };
@@ -132,8 +134,8 @@ export default function AdminCareersPage() {
     setEditing(career);
     setAdding(false);
     setForm({
-      title: career.title, emoji: career.emoji, description: career.description,
-      brief: career.brief, salary_min: career.salary_min, salary_max: career.salary_max,
+      title: career.title, emoji: career.emoji, image_url: career.image_url ?? "", description: career.description,
+      brief: career.brief, salary_min: career.salary_min, salary_max: career.salary_max, salary_avg: career.salary_avg ?? 0,
       outlook: career.outlook, pros: career.pros?.length ? career.pros : [""],
       cons: career.cons?.length ? career.cons : [""],
       required_skills: career.required_skills?.length ? career.required_skills : [""],
@@ -170,12 +172,40 @@ export default function AdminCareersPage() {
           {/* Basic info */}
           <div className="grid grid-cols-4 gap-4">
             <div>
-              <label className={labelCls}>Emoji</label>
+              <label className={labelCls}>Emoji (fallback)</label>
               <input className={inputCls} value={form.emoji} onChange={e => set("emoji", e.target.value)} placeholder="💼" />
             </div>
             <div className="col-span-3">
               <label className={labelCls}>Title *</label>
               <input className={inputCls} value={form.title} onChange={e => set("title", e.target.value)} placeholder="e.g. Software Engineer" />
+            </div>
+          </div>
+
+          {/* Image upload */}
+          <div>
+            <label className={labelCls}>Career Image (optional — replaces emoji)</label>
+            <div className="flex items-center gap-4">
+              {form.image_url && (
+                <img src={form.image_url} alt="" className="h-16 w-16 rounded-2xl object-cover border border-slate-200" />
+              )}
+              <div className="flex-1 space-y-2">
+                <input className={inputCls} value={form.image_url ?? ""} onChange={e => set("image_url", e.target.value)}
+                  placeholder="Paste image URL or upload below" />
+                <label className="flex items-center gap-2 cursor-pointer rounded-xl border-2 border-dashed border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-500 hover:border-violet-300 hover:text-violet-600 transition w-full justify-center">
+                  📤 Upload Image
+                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const ext = file.name.split(".").pop();
+                    const path = `careers/${Date.now()}.${ext}`;
+                    const { error } = await supabase.storage.from("course-files").upload(path, file, { upsert: true });
+                    if (!error) {
+                      const { data } = supabase.storage.from("course-files").getPublicUrl(path);
+                      set("image_url", data.publicUrl);
+                    }
+                  }} />
+                </label>
+              </div>
             </div>
           </div>
 
@@ -190,14 +220,12 @@ export default function AdminCareersPage() {
           </div>
 
           {/* Salary + Outlook */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelCls}>Min Salary ($/yr)</label>
-              <input className={inputCls} type="number" min={0} value={form.salary_min || ""} onChange={e => set("salary_min", Number(e.target.value))} placeholder="60000" />
-            </div>
-            <div>
-              <label className={labelCls}>Max Salary ($/yr)</label>
-              <input className={inputCls} type="number" min={0} value={form.salary_max || ""} onChange={e => set("salary_max", Number(e.target.value))} placeholder="150000" />
+              <label className={labelCls}>Average Salary ($/yr)</label>
+              <input className={inputCls} type="number" min={0} value={form.salary_avg || ""}
+                onChange={e => set("salary_avg", Number(e.target.value))} placeholder="e.g. 95000" />
+              <p className="text-xs font-semibold text-slate-400 mt-1">Shown to students as "~$95,000/yr"</p>
             </div>
             <div>
               <label className={labelCls}>Outlook</label>
@@ -304,13 +332,18 @@ export default function AdminCareersPage() {
         <div className="space-y-3">
           {careers.map(career => (
             <div key={career.id} className="flex items-center gap-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm hover:shadow-md transition">
-              <div className="text-3xl shrink-0">{career.emoji}</div>
+              <div className="h-12 w-12 shrink-0 rounded-xl overflow-hidden border border-slate-100 flex items-center justify-center bg-slate-50">
+                {career.image_url
+                  ? <img src={career.image_url} alt="" className="h-full w-full object-cover" />
+                  : <span className="text-2xl">{career.emoji}</span>
+                }
+              </div>
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-slate-900">{career.title}</div>
                 {career.brief && <div className="text-xs font-semibold text-slate-500 mt-0.5 truncate">{career.brief}</div>}
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                  {career.salary_min > 0 && (
-                    <span className="text-xs font-semibold text-emerald-600">💰 {formatSalary(career.salary_min)}–{formatSalary(career.salary_max)}</span>
+                  {(career.salary_avg > 0 || career.salary_min > 0) && (
+                    <span className="text-xs font-semibold text-emerald-600">💰 ~{formatSalary(career.salary_avg || Math.round((career.salary_min + career.salary_max) / 2))}/yr</span>
                   )}
                   {career.outlook && (
                     <span className={`text-xs font-bold rounded-full px-2 py-0.5 ${OUTLOOK_OPTIONS.find(o => o.value === career.outlook)?.color ?? ""}`}>
