@@ -107,9 +107,11 @@ export default function AdminDailyChallengesPage() {
     setSaving(true);
     const payload = { ...form, updated_at: new Date().toISOString() };
     if (editing) {
-      await supabase.from("daily_challenges").update(payload).eq("id", editing.id);
+      const { error } = await supabase.from("daily_challenges").update(payload).eq("id", editing.id);
+      if (error) { alert("Save error: " + error.message); setSaving(false); return; }
     } else {
-      await supabase.from("daily_challenges").insert(payload);
+      const { error } = await supabase.from("daily_challenges").insert(payload);
+      if (error) { alert("Save error: " + error.message); setSaving(false); return; }
     }
     await loadChallenges();
     setModal(false);
