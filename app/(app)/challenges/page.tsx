@@ -314,8 +314,13 @@ function FillBlankChallenge({ challenge, onComplete }: { challenge: Challenge; o
 
 // ── Word Search ────────────────────────────────────────────────
 function WordSearchChallenge({ challenge, onComplete }: { challenge: Challenge; onComplete: (r: string) => void }) {
-  const words = challenge.word_search_words ?? [];
-  const grid = challenge.word_search_grid ?? generateWordSearchGrid(words);
+  const words = Array.isArray(challenge.word_search_words) ? challenge.word_search_words
+    : typeof challenge.word_search_words === "string" ? (() => { try { return JSON.parse(challenge.word_search_words as string); } catch { return []; } })()
+    : [];
+  const rawGrid = challenge.word_search_grid;
+  const grid = Array.isArray(rawGrid) ? rawGrid
+    : typeof rawGrid === "string" ? (() => { try { return JSON.parse(rawGrid); } catch { return generateWordSearchGrid(words); } })()
+    : generateWordSearchGrid(words);
   const [found, setFound] = useState<Set<string>>(new Set());
   const [selecting, setSelecting] = useState<number[][]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -454,9 +459,14 @@ function HiddenObjectChallenge({ challenge, onComplete }: { challenge: Challenge
 
 // ── Sudoku ─────────────────────────────────────────────────────
 function SudokuChallenge({ challenge, onComplete }: { challenge: Challenge; onComplete: (r: string) => void }) {
-  const puzzle = challenge.sudoku_puzzle ?? Array.from({ length: 9 }, () => Array(9).fill(0));
-  const solution = challenge.sudoku_solution ?? puzzle;
-  const [board, setBoard] = useState<number[][]>(puzzle.map(r => [...r]));
+  const parsePuzzle = (data: unknown): number[][] => {
+    if (Array.isArray(data)) return data;
+    if (typeof data === "string") { try { return JSON.parse(data); } catch { return Array.from({ length: 9 }, () => Array(9).fill(0)); } }
+    return Array.from({ length: 9 }, () => Array(9).fill(0));
+  };
+  const puzzle = parsePuzzle(challenge.sudoku_puzzle);
+  const solution = parsePuzzle(challenge.sudoku_solution ?? challenge.sudoku_puzzle);
+  const [board, setBoard] = useState<number[][]>(puzzle.map((r: number[]) => [...r]));
   const [errors, setErrors] = useState<Set<string>>(new Set());
   const [solved, setSolved] = useState(false);
 
@@ -505,7 +515,9 @@ function SudokuChallenge({ challenge, onComplete }: { challenge: Challenge; onCo
 
 // ── Memory Match ───────────────────────────────────────────────
 function MemoryMatchChallenge({ challenge, onComplete }: { challenge: Challenge; onComplete: (r: string) => void }) {
-  const pairs = challenge.memory_pairs ?? [];
+  const pairs = Array.isArray(challenge.memory_pairs) ? challenge.memory_pairs
+    : typeof challenge.memory_pairs === "string" ? (() => { try { return JSON.parse(challenge.memory_pairs as string); } catch { return []; } })()
+    : [];
   const [cards] = useState(() => {
     const all = [...pairs.map((p, i) => ({ id: `a${i}`, value: p.a, pairId: i })),
                  ...pairs.map((p, i) => ({ id: `b${i}`, value: p.b, pairId: i }))]
@@ -563,7 +575,9 @@ function MemoryMatchChallenge({ challenge, onComplete }: { challenge: Challenge;
 
 // ── Sort & Rank ────────────────────────────────────────────────
 function SortRankChallenge({ challenge, onComplete }: { challenge: Challenge; onComplete: (r: string) => void }) {
-  const correct = challenge.sort_items ?? [];
+  const correct = Array.isArray(challenge.sort_items) ? challenge.sort_items
+    : typeof challenge.sort_items === "string" ? (() => { try { return JSON.parse(challenge.sort_items as string); } catch { return []; } })()
+    : [];
   const [items, setItems] = useState(() => [...correct].sort(() => Math.random() - 0.5));
   const [checked, setChecked] = useState(false);
   const [result, setResult] = useState<boolean | null>(null);
