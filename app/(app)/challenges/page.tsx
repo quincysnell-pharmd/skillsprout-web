@@ -337,7 +337,7 @@ function WordSearchChallenge({ challenge, onComplete }: { challenge: Challenge; 
     // Check if selection forms a word
     const selectedLetters = newSelecting.map(([rr, cc]) => grid[rr][cc]).join("");
     const reversed = selectedLetters.split("").reverse().join("");
-    const matchedWord = words.find((w: string): boolean => w === selectedLetters || w === reversed);
+    const matchedWord = words.find((w: string) => w === selectedLetters || w === reversed);
     if (matchedWord) {
       const newFound = new Set([...found, matchedWord]);
       setFound(newFound);
@@ -458,6 +458,49 @@ function HiddenObjectChallenge({ challenge, onComplete }: { challenge: Challenge
 }
 
 // ── Sudoku ─────────────────────────────────────────────────────
+function SudokuHowToPlay({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-3xl bg-white shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="font-display text-lg font-black text-indigo-900">How to Play Sudoku</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 font-bold text-xl">✕</button>
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-start gap-3 rounded-xl bg-indigo-50 p-3">
+            <span className="text-2xl shrink-0">9️⃣</span>
+            <p className="text-sm font-semibold text-indigo-800">The grid is 9×9, divided into nine 3×3 boxes.</p>
+          </div>
+          <div className="flex items-start gap-3 rounded-xl bg-violet-50 p-3">
+            <span className="text-2xl shrink-0">1️⃣</span>
+            <p className="text-sm font-semibold text-violet-800">Fill every row with the numbers 1–9. No repeats!</p>
+          </div>
+          <div className="flex items-start gap-3 rounded-xl bg-sky-50 p-3">
+            <span className="text-2xl shrink-0">⬇️</span>
+            <p className="text-sm font-semibold text-sky-800">Fill every column with the numbers 1–9. No repeats!</p>
+          </div>
+          <div className="flex items-start gap-3 rounded-xl bg-emerald-50 p-3">
+            <span className="text-2xl shrink-0">🟦</span>
+            <p className="text-sm font-semibold text-emerald-800">Each 3×3 box must also contain 1–9. No repeats!</p>
+          </div>
+          <div className="flex items-start gap-3 rounded-xl bg-amber-50 p-3">
+            <span className="text-2xl shrink-0">🔵</span>
+            <p className="text-sm font-semibold text-amber-800">Gray cells are fixed — only fill in the white ones!</p>
+          </div>
+          <div className="flex items-start gap-3 rounded-xl bg-rose-50 p-3">
+            <span className="text-2xl shrink-0">❌</span>
+            <p className="text-sm font-semibold text-rose-800">Red cells mean your number doesn't match the solution — try again!</p>
+          </div>
+        </div>
+        <button onClick={onClose}
+          className="w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white hover:bg-indigo-700 transition">
+          Got it — let me play! 🎯
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SudokuChallenge({ challenge, onComplete }: { challenge: Challenge; onComplete: (r: string) => void }) {
   const parsePuzzle = (data: unknown): number[][] => {
     if (Array.isArray(data)) return data;
@@ -469,6 +512,7 @@ function SudokuChallenge({ challenge, onComplete }: { challenge: Challenge; onCo
   const [board, setBoard] = useState<number[][]>(puzzle.map((r: number[]) => [...r]));
   const [errors, setErrors] = useState<Set<string>>(new Set());
   const [solved, setSolved] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   function handleInput(r: number, c: number, val: string) {
     if (puzzle[r][c] !== 0) return;
@@ -477,17 +521,34 @@ function SudokuChallenge({ challenge, onComplete }: { challenge: Challenge; onCo
     const newBoard = board.map(row => [...row]);
     newBoard[r][c] = n;
     setBoard(newBoard);
-    // Check for errors
-    const newErrors = new Set<string>();
-    if (n !== 0 && n !== solution[r][c]) newErrors.add(`${r},${c}`);
-    setErrors(newErrors);
+    // Remove error while typing
+    setErrors(prev => { const s = new Set(prev); s.delete(`${r},${c}`); return s; });
+  }
+
+  function handleBlur(r: number, c: number) {
+    if (puzzle[r][c] !== 0) return;
+    const n = board[r][c];
+    // Check for errors on blur
+    if (n !== 0 && n !== solution[r][c]) {
+      setErrors(prev => new Set([...prev, `${r},${c}`]));
+    } else {
+      setErrors(prev => { const s = new Set(prev); s.delete(`${r},${c}`); return s; });
+    }
     // Check if solved
-    const isSolved = newBoard.every((row, ri) => row.every((cell, ci) => cell === solution[ri][ci]));
+    const isSolved = board.every((row, ri) => row.every((cell, ci) => cell === solution[ri][ci]));
     if (isSolved) { setSolved(true); setTimeout(() => onComplete("solved"), 800); }
   }
 
   return (
     <div className="space-y-4">
+      {showHelp && <SudokuHowToPlay onClose={() => setShowHelp(false)} />}
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-slate-500">Fill in the grid — each row, column, and 3×3 box needs 1–9</p>
+        <button onClick={() => setShowHelp(true)}
+          className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition">
+          ❓ How to Play
+        </button>
+      </div>
       <div className="overflow-x-auto">
         <div className="inline-block rounded-2xl border-2 border-indigo-300 overflow-hidden">
           {board.map((row, r) => (
@@ -498,6 +559,7 @@ function SudokuChallenge({ challenge, onComplete }: { challenge: Challenge; onCo
                 return (
                   <input key={c} type="number" min={1} max={9} value={cell || ""}
                     onChange={e => handleInput(r, c, e.target.value)}
+                    onBlur={() => handleBlur(r, c)}
                     readOnly={isFixed}
                     className={`h-9 w-9 text-center text-sm font-black border-0 outline-none
                       ${c % 3 === 2 && c !== 8 ? "border-r-2 border-indigo-400" : ""}
@@ -508,7 +570,13 @@ function SudokuChallenge({ challenge, onComplete }: { challenge: Challenge; onCo
           ))}
         </div>
       </div>
-      {solved && <div className="rounded-xl bg-emerald-100 px-4 py-3 text-sm font-bold text-emerald-800">🎉 Puzzle solved!</div>}
+      {solved && (
+        <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-5 text-center space-y-2">
+          <div className="text-4xl">🎉</div>
+          <p className="font-display text-lg font-black text-emerald-900">Puzzle Solved!</p>
+          <p className="text-sm font-bold text-emerald-700">Amazing work — you earned <span className="text-amber-600">+{challenge.xp_reward} XP</span>!</p>
+        </div>
+      )}
     </div>
   );
 }
