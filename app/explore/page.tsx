@@ -551,28 +551,16 @@ export default function ExplorePage() {
           </div>
         )}
 
-        {!childId && !loading && (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center">
-            <p className="text-sm font-bold text-amber-800">Sign in to save your progress and streak!</p>
-            <a href="/auth" className="mt-2 inline-block rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white hover:bg-amber-600 transition">Sign In →</a>
+        {/* Daily Challenges CTA */}
+        <a href="/challenges"
+          className="flex items-center gap-5 rounded-2xl border-2 border-violet-200 bg-violet-50 p-5 hover:border-violet-400 hover:bg-violet-100 transition group">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-violet-500 text-3xl shadow-sm">⚡</div>
+          <div className="flex-1 min-w-0">
+            <div className="font-display font-black text-violet-900 text-lg">Today's Challenges</div>
+            <div className="text-sm font-semibold text-violet-600 mt-0.5">Tap to see today's challenges and earn XP!</div>
           </div>
-        )}
-
-        {/* Tab buttons */}
-        <div className="flex flex-wrap gap-2">
-          {(Object.keys(CHALLENGE_LABELS) as ChallengeType[]).map((type) => (
-            <TabBtn key={type} active={activeTab === type} done={completedToday.has(type)} onClick={() => setActiveTab(type)}>
-              {CHALLENGE_LABELS[type]}
-            </TabBtn>
-          ))}
-        </div>
-
-        {/* Challenge panels */}
-        {activeTab === "hands-on"      && <HandsOnChallenge  onComplete={() => handleComplete("hands-on")}      done={completedToday.has("hands-on")} />}
-        {activeTab === "word-scramble" && <WordScramble      onComplete={() => handleComplete("word-scramble")} done={completedToday.has("word-scramble")} />}
-        {activeTab === "riddle"        && <RiddleChallenge   onComplete={() => handleComplete("riddle")}        done={completedToday.has("riddle")} />}
-        {activeTab === "trivia"        && <TriviaQuiz        onComplete={() => handleComplete("trivia")}        done={completedToday.has("trivia")} />}
-        {activeTab === "wordsearch"    && <WordSearch        onComplete={() => handleComplete("wordsearch")}    done={completedToday.has("wordsearch")} />}
+          <span className="shrink-0 text-violet-500 font-black text-lg group-hover:translate-x-1 transition-transform">→</span>
+        </a>
       </section>
 
       {/* Interest Grid */}
@@ -591,19 +579,21 @@ export default function ExplorePage() {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h3 className="font-display text-lg font-bold text-emerald-900">Want to save your streak and unlock more?</h3>
-            <p className="mt-1 text-sm font-semibold text-slate-500">Profiles are free. Parents choose privacy settings.</p>
+      {/* CTA — only show when not logged in */}
+      {!childId && !loading && (
+        <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="font-display text-lg font-bold text-emerald-900">Want to save your streak and unlock more?</h3>
+              <p className="mt-1 text-sm font-semibold text-slate-500">Profiles are free. Parents choose privacy settings.</p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Link href="/auth" className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">Create / Sign in</Link>
+              <Link href="/" className="rounded-xl border-2 border-emerald-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-800 hover:bg-emerald-50">Back to Home</Link>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <Link href="/auth" className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">Create / Sign in</Link>
-            <Link href="/" className="rounded-xl border-2 border-emerald-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-800 hover:bg-emerald-50">Back to Home</Link>
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
     </div>
   );
 }

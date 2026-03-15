@@ -155,8 +155,8 @@ export default function AdminCareersPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl font-black text-slate-900">💼 Careers</h1>
-          <p className="text-sm font-semibold text-slate-500 mt-1">Manage career cards shown to students</p>
+          <h1 className="font-display text-2xl font-black text-slate-900">🚀 Futures</h1>
+          <p className="text-sm font-semibold text-slate-500 mt-1">Manage future career cards shown to students</p>
         </div>
         {!showForm && (
           <button onClick={() => { setAdding(true); setEditing(null); setForm({ ...BLANK }); }}

@@ -37,7 +37,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { label: "Courses",    href: "/admin/courses",    emoji: "📚" },
     { label: "Challenges", href: "/admin/challenges", emoji: "⚡" },
     { label: "Community",  href: "/admin/community",  emoji: "🌱" },
-    { label: "Careers",    href: "/admin/careers",    emoji: "💼" },
+    { label: "Futures",    href: "/admin/careers",    emoji: "🚀" },
     { label: "Users",      href: "/admin/users",      emoji: "👥" },
     { label: "Announcements", href: "/admin/announcements", emoji: "📣" },
   ];
