@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
 
-type ChallengeType = "quiz" | "reflection" | "action" | "video";
+type ChallengeType = "quiz" | "reflection" | "action" | "video" | "unscramble" | "fill_blank" | "word_search" | "hidden_object" | "sudoku" | "memory_match" | "sort_rank";
 
 interface Challenge {
   id: string;
@@ -23,35 +23,52 @@ interface Challenge {
   action_verification?: string;
   video_url?: string;
   video_prompt?: string;
+  unscramble_word?: string;
+  unscramble_hint?: string;
+  fill_blank_sentence?: string;
+  fill_blank_answer?: string;
+  fill_blank_hint?: string;
+  word_search_words?: string[];
+  hidden_object_image_url?: string;
+  hidden_object_targets?: string;
+  sudoku_puzzle?: string;
+  sudoku_solution?: string;
+  memory_pairs?: string;
+  sort_items?: string[];
+  sort_prompt?: string;
   is_published: boolean;
 }
 
 const TYPE_CONFIG: Record<ChallengeType, { label: string; emoji: string; color: string }> = {
-  quiz:       { label: "Quiz",       emoji: "❓", color: "bg-violet-100 text-violet-700 border-violet-200" },
-  reflection: { label: "Reflection", emoji: "💬", color: "bg-sky-100 text-sky-700 border-sky-200" },
-  action:     { label: "Action",     emoji: "⚡", color: "bg-amber-100 text-amber-700 border-amber-200" },
-  video:      { label: "Video",      emoji: "🎬", color: "bg-rose-100 text-rose-700 border-rose-200" },
+  quiz:          { label: "Quiz",          emoji: "❓", color: "bg-violet-100 text-violet-700 border-violet-200" },
+  reflection:    { label: "Reflection",    emoji: "💬", color: "bg-sky-100 text-sky-700 border-sky-200"         },
+  action:        { label: "Action",        emoji: "⚡", color: "bg-amber-100 text-amber-700 border-amber-200"   },
+  video:         { label: "Video",         emoji: "🎬", color: "bg-rose-100 text-rose-700 border-rose-200"      },
+  unscramble:    { label: "Unscramble",    emoji: "🔤", color: "bg-orange-100 text-orange-700 border-orange-200"},
+  fill_blank:    { label: "Fill in Blank", emoji: "✏️", color: "bg-lime-100 text-lime-700 border-lime-200"      },
+  word_search:   { label: "Word Search",   emoji: "🔍", color: "bg-teal-100 text-teal-700 border-teal-200"      },
+  hidden_object: { label: "Hidden Object", emoji: "👁️", color: "bg-pink-100 text-pink-700 border-pink-200"      },
+  sudoku:        { label: "Sudoku",        emoji: "🔢", color: "bg-indigo-100 text-indigo-700 border-indigo-200"},
+  memory_match:  { label: "Memory Match",  emoji: "🃏", color: "bg-purple-100 text-purple-700 border-purple-200"},
+  sort_rank:     { label: "Sort & Rank",   emoji: "📊", color: "bg-cyan-100 text-cyan-700 border-cyan-200"      },
 };
 
 const CATEGORIES = ["general", "cooking", "coding", "gardening", "money", "art", "science", "music", "writing"];
 
 const BLANK: Omit<Challenge, "id"> = {
   scheduled_date: new Date().toISOString().split("T")[0],
-  title: "",
-  description: "",
-  type: "quiz",
-  category: "general",
-  xp_reward: 10,
-  order_index: 0,
-  quiz_question: "",
-  quiz_options: ["", "", "", ""],
-  quiz_correct_index: 0,
-  reflection_prompt: "",
-  min_words: 20,
-  action_instruction: "",
-  action_verification: "",
-  video_url: "",
-  video_prompt: "",
+  title: "", description: "", type: "quiz", category: "general",
+  xp_reward: 10, order_index: 0,
+  quiz_question: "", quiz_options: ["", "", "", ""], quiz_correct_index: 0,
+  reflection_prompt: "", min_words: 20,
+  action_instruction: "", action_verification: "",
+  video_url: "", video_prompt: "",
+  unscramble_word: "", unscramble_hint: "",
+  fill_blank_sentence: "", fill_blank_answer: "", fill_blank_hint: "",
+  word_search_words: [],
+  hidden_object_image_url: "", hidden_object_targets: "",
+  sudoku_puzzle: "", sudoku_solution: "",
+  memory_pairs: "", sort_items: [], sort_prompt: "",
   is_published: true,
 };
 
@@ -145,7 +162,7 @@ export default function AdminDailyChallengesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display text-2xl font-black text-slate-900">Daily Challenges</h1>
-          <p className="text-sm font-semibold text-slate-500 mt-0.5">Schedule challenges for students — multiple per day supported</p>
+          <p className="text-sm font-semibold text-slate-500 mt-0.5">Schedule challenges for students — 11 types, multiple per day supported</p>
         </div>
         <button onClick={() => openAdd()}
           className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition">
@@ -355,6 +372,116 @@ export default function AdminDailyChallengesPage() {
                   <div>
                     <label className="text-xs font-semibold text-slate-500 mb-1 block">Follow-up prompt (after watching)</label>
                     <textarea className={inputCls} rows={2} value={form.video_prompt} onChange={e => set("video_prompt", e.target.value)} placeholder="e.g. What was the most surprising thing you learned?" />
+                  </div>
+                </div>
+              )}
+
+              {form.type === "unscramble" && (
+                <div className="rounded-2xl border-2 border-orange-100 bg-orange-50 p-4 space-y-3">
+                  <p className="text-xs font-black text-orange-700 uppercase tracking-wide">🔤 Unscramble Settings</p>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Word to unscramble</label>
+                    <input className={inputCls} value={form.unscramble_word} onChange={e => set("unscramble_word", e.target.value.toUpperCase())} placeholder="e.g. INVEST" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Hint (optional)</label>
+                    <input className={inputCls} value={form.unscramble_hint} onChange={e => set("unscramble_hint", e.target.value)} placeholder="e.g. What you do with money to make it grow" />
+                  </div>
+                </div>
+              )}
+
+              {form.type === "fill_blank" && (
+                <div className="rounded-2xl border-2 border-lime-100 bg-lime-50 p-4 space-y-3">
+                  <p className="text-xs font-black text-lime-700 uppercase tracking-wide">✏️ Fill in the Blank Settings</p>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Sentence (use ___ for the blank)</label>
+                    <input className={inputCls} value={form.fill_blank_sentence} onChange={e => set("fill_blank_sentence", e.target.value)} placeholder="e.g. A ___ is a share of ownership in a company." />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Correct answer</label>
+                    <input className={inputCls} value={form.fill_blank_answer} onChange={e => set("fill_blank_answer", e.target.value)} placeholder="e.g. stock" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Hint (optional)</label>
+                    <input className={inputCls} value={form.fill_blank_hint} onChange={e => set("fill_blank_hint", e.target.value)} placeholder="e.g. Starts with S" />
+                  </div>
+                </div>
+              )}
+
+              {form.type === "word_search" && (
+                <div className="rounded-2xl border-2 border-teal-100 bg-teal-50 p-4 space-y-3">
+                  <p className="text-xs font-black text-teal-700 uppercase tracking-wide">🔍 Word Search Settings</p>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Words to find (one per line, uppercase)</label>
+                    <textarea className={inputCls} rows={5}
+                      value={(form.word_search_words ?? []).join("\n")}
+                      onChange={e => set("word_search_words", e.target.value.toUpperCase().split("\n").map((w: string) => w.trim()).filter(Boolean))}
+                      placeholder="STOCK&#10;INVEST&#10;MONEY&#10;SAVE" />
+                    <p className="text-xs font-semibold text-teal-600 mt-1">Grid will be auto-generated from these words</p>
+                  </div>
+                </div>
+              )}
+
+              {form.type === "hidden_object" && (
+                <div className="rounded-2xl border-2 border-pink-100 bg-pink-50 p-4 space-y-3">
+                  <p className="text-xs font-black text-pink-700 uppercase tracking-wide">👁️ Hidden Object Settings</p>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Image URL</label>
+                    <input className={inputCls} value={form.hidden_object_image_url} onChange={e => set("hidden_object_image_url", e.target.value)} placeholder="Paste image URL" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Objects to find (JSON: [{"{"}x:50,y:30,label:"Apple"{"}"}])</label>
+                    <textarea className={inputCls} rows={3} value={form.hidden_object_targets}
+                      onChange={e => set("hidden_object_targets", e.target.value)}
+                      placeholder="[{x:25,y:40,label:Apple},{x:75,y:60,label:Orange}]" />
+                    <p className="text-xs font-semibold text-pink-600 mt-1">x and y are percentages (0-100) from top-left</p>
+                  </div>
+                </div>
+              )}
+
+              {form.type === "sudoku" && (
+                <div className="rounded-2xl border-2 border-indigo-100 bg-indigo-50 p-4 space-y-3">
+                  <p className="text-xs font-black text-indigo-700 uppercase tracking-wide">🔢 Sudoku Settings</p>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Puzzle (9x9 JSON, 0 = empty cell)</label>
+                    <textarea className={inputCls} rows={4} value={form.sudoku_puzzle}
+                      onChange={e => set("sudoku_puzzle", e.target.value)}
+                      placeholder={"[[5,3,0,0,7,0,0,0,0],[6,0,0,1,9,5,0,0,0],...]"} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Solution (9x9 JSON, fully filled)</label>
+                    <textarea className={inputCls} rows={4} value={form.sudoku_solution}
+                      onChange={e => set("sudoku_solution", e.target.value)}
+                      placeholder={"[[5,3,4,6,7,8,9,1,2],[6,7,2,1,9,5,3,4,8],...]"} />
+                  </div>
+                </div>
+              )}
+
+              {form.type === "memory_match" && (
+                <div className="rounded-2xl border-2 border-purple-100 bg-purple-50 p-4 space-y-3">
+                  <p className="text-xs font-black text-purple-700 uppercase tracking-wide">🃏 Memory Match Settings</p>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Pairs (JSON: [{"{"}a:"🍎",b:"Apple"{"}"}])</label>
+                    <textarea className={inputCls} rows={4} value={form.memory_pairs}
+                      onChange={e => set("memory_pairs", e.target.value)}
+                      placeholder="Enter JSON pairs: [{a:emoji,b:description}]" />
+                  </div>
+                </div>
+              )}
+
+              {form.type === "sort_rank" && (
+                <div className="rounded-2xl border-2 border-cyan-100 bg-cyan-50 p-4 space-y-3">
+                  <p className="text-xs font-black text-cyan-700 uppercase tracking-wide">📊 Sort & Rank Settings</p>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Prompt</label>
+                    <input className={inputCls} value={form.sort_prompt} onChange={e => set("sort_prompt", e.target.value)} placeholder="e.g. Order these from smallest to largest" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Items in correct order (one per line)</label>
+                    <textarea className={inputCls} rows={5}
+                      value={(form.sort_items ?? []).join("\n")}
+                      onChange={e => set("sort_items", e.target.value.split("\n").map((w: string) => w.trim()).filter(Boolean))}
+                      placeholder="Penny (1¢)&#10;Nickel (5¢)&#10;Dime (10¢)&#10;Quarter (25¢)" />
                   </div>
                 </div>
               )}
