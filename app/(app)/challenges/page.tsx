@@ -683,7 +683,7 @@ export default function DailyChallengesPage() {
   const [xpGained, setXpGained]       = useState(0);
   const [showXP, setShowXP]           = useState(false);
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString("en-CA"); // en-CA gives YYYY-MM-DD in local time
 
   useEffect(() => { loadData(); }, []);
 

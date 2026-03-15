@@ -56,7 +56,7 @@ const TYPE_CONFIG: Record<ChallengeType, { label: string; emoji: string; color: 
 const CATEGORIES = ["general", "cooking", "coding", "gardening", "money", "art", "science", "music", "writing"];
 
 const BLANK: Omit<Challenge, "id"> = {
-  scheduled_date: new Date().toISOString().split("T")[0],
+  scheduled_date: new Date().toLocaleDateString("en-CA"),
   title: "", description: "", type: "quiz", category: "general",
   xp_reward: 10, order_index: 0,
   quiz_question: "", quiz_options: ["", "", "", ""], quiz_correct_index: 0,
@@ -84,7 +84,7 @@ export default function AdminDailyChallengesPage() {
   const [form, setForm] = useState<Omit<Challenge, "id">>(BLANK);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
+  const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString("en-CA"));
 
   useEffect(() => { loadChallenges(); }, []);
 
@@ -122,7 +122,7 @@ export default function AdminDailyChallengesPage() {
   async function save() {
     if (!form.title.trim()) { setError("Title is required."); return; }
     setSaving(true);
-    const payload = { ...form, content: form.title, updated_at: new Date().toISOString() };
+    const payload = { ...form, updated_at: new Date().toISOString() };
     if (editing) {
       const { error } = await supabase.from("daily_challenges").update(payload).eq("id", editing.id);
       if (error) { alert("Save error: " + error.message); setSaving(false); return; }
