@@ -122,7 +122,7 @@ export default function AdminDailyChallengesPage() {
   async function save() {
     if (!form.title.trim()) { setError("Title is required."); return; }
     setSaving(true);
-    const payload = { ...form, updated_at: new Date().toISOString() };
+    const payload = { ...form, content: form.title, updated_at: new Date().toISOString() };
     if (editing) {
       const { error } = await supabase.from("daily_challenges").update(payload).eq("id", editing.id);
       if (error) { alert("Save error: " + error.message); setSaving(false); return; }
