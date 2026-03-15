@@ -337,7 +337,7 @@ function WordSearchChallenge({ challenge, onComplete }: { challenge: Challenge; 
     // Check if selection forms a word
     const selectedLetters = newSelecting.map(([rr, cc]) => grid[rr][cc]).join("");
     const reversed = selectedLetters.split("").reverse().join("");
-    const matchedWord = words.find(w => w === selectedLetters || w === reversed);
+    const matchedWord = words.find((w: string): boolean => w === selectedLetters || w === reversed);
     if (matchedWord) {
       const newFound = new Set([...found, matchedWord]);
       setFound(newFound);
@@ -347,7 +347,7 @@ function WordSearchChallenge({ challenge, onComplete }: { challenge: Challenge; 
         setDone(true);
         setTimeout(() => onComplete(words.join(",")), 800);
       }
-    } else if (newSelecting.length > Math.max(...words.map(w => w.length))) {
+    } else if (newSelecting.length > Math.max(...words.map((w: string) => w.length))) {
       setSelecting([]);
       setSelected(new Set());
     }
@@ -357,7 +357,7 @@ function WordSearchChallenge({ challenge, onComplete }: { challenge: Challenge; 
     <div className="space-y-4">
       {/* Word list */}
       <div className="flex flex-wrap gap-2">
-        {words.map(w => (
+        {words.map((w: string) => (
           <span key={w} className={`rounded-lg px-3 py-1 text-xs font-black transition ${found.has(w) ? "bg-emerald-500 text-white line-through" : "bg-slate-100 text-slate-700"}`}>
             {w}
           </span>
@@ -366,9 +366,9 @@ function WordSearchChallenge({ challenge, onComplete }: { challenge: Challenge; 
       {/* Grid */}
       <div className="overflow-x-auto">
         <div className="inline-block rounded-2xl border-2 border-teal-200 bg-teal-50 p-3">
-          {grid.map((row, r) => (
+          {grid.map((row: string[], r: number) => (
             <div key={r} className="flex">
-              {row.map((cell, c) => {
+              {row.map((cell: string | number, c: number) => {
                 const key = cellKey(r, c);
                 const isSelected = selected.has(key);
                 return (
@@ -492,7 +492,7 @@ function SudokuChallenge({ challenge, onComplete }: { challenge: Challenge; onCo
         <div className="inline-block rounded-2xl border-2 border-indigo-300 overflow-hidden">
           {board.map((row, r) => (
             <div key={r} className={`flex ${r % 3 === 0 && r !== 0 ? "border-t-2 border-indigo-400" : ""}`}>
-              {row.map((cell, c) => {
+              {row.map((cell: string | number, c: number) => {
                 const isFixed = puzzle[r][c] !== 0;
                 const isError = errors.has(`${r},${c}`);
                 return (
@@ -519,8 +519,8 @@ function MemoryMatchChallenge({ challenge, onComplete }: { challenge: Challenge;
     : typeof challenge.memory_pairs === "string" ? (() => { try { return JSON.parse(challenge.memory_pairs as string); } catch { return []; } })()
     : [];
   const [cards] = useState(() => {
-    const all = [...pairs.map((p, i) => ({ id: `a${i}`, value: p.a, pairId: i })),
-                 ...pairs.map((p, i) => ({ id: `b${i}`, value: p.b, pairId: i }))]
+    const all = [...pairs.map((p: {a: string; b: string}, i: number) => ({ id: `a${i}`, value: p.a, pairId: i })),
+                 ...pairs.map((p: {a: string; b: string}, i: number) => ({ id: `b${i}`, value: p.b, pairId: i }))]
       .sort(() => Math.random() - 0.5);
     return all;
   });
