@@ -1,175 +1,266 @@
 "use client";
 
-import Link from "next/link";
-import Image from "next/image";
-import { useState, useEffect } from "react";
-import { supabaseBrowser } from "../app/lib/supabase/client";
+import { useEffect, useState } from "react";
+import { supabaseBrowser } from "@/app/lib/supabase/client";
 
-type UserRole = "guest" | "kid" | "parent" | "admin";
-
-const ADMIN_LINK = { href: "/admin", label: "Admin" };
-
-const PUBLIC_LINKS = [
-  { href: "/explore",  label: "Explore"  },
-  { href: "/courses",  label: "Courses"  },
-  { href: "/careers",  label: "Futures"  },
-  { href: "/about",    label: "About Us" },
-];
-
-export default function SiteHeader() {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const [role, setRole]         = useState<UserRole>("guest");
-  const [childId, setChildId]   = useState<string | null>(null);
-  const supabase                = supabaseBrowser();
-
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 8);
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  useEffect(() => {
-    async function detectRole() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setRole("guest"); return; }
-
-      const { data: adminRow } = await supabase
-        .from("admins").select("id").eq("user_id", user.id).maybeSingle();
-      if (adminRow) { setRole("admin"); return; }
-
-      const { data: childRow } = await supabase
-        .from("child_profiles").select("id").eq("user_id", user.id).maybeSingle();
-      if (childRow) { setRole("kid"); setChildId(childRow.id); return; }
-
-      setRole("parent");
-    }
-
-    detectRole();
-
-    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
-        detectRole();
-      }
-    });
-
-    return () => listener.subscription.unsubscribe();
-  }, []);
-
-  const closeMenu = () => setMenuOpen(false);
-
-  const roleLinks = () => {
-    if (role === "kid" && childId) return [{ href: `/dashboard/child/${childId}`, label: "My Profile" }];
-    if (role === "parent") return [{ href: "/dashboard/parent", label: "Parent View" }];
-    return [];
+// ── Types ─────────────────────────────────────────────────────
+interface Post {
+  id: string;
+  type: "reflection" | "showcase" | "discovery";
+  title?: string;
+  content: string;
+  images?: string[];
+  video_url?: string;
+  category?: string;
+  created_at: string;
+  child_profiles: {
+    display_name: string;
+    username: string;
+    avatar_url?: string;
   };
+  courses?: { title: string; emoji?: string };
+}
 
-  const allNavLinks = [...PUBLIC_LINKS, ...roleLinks()];
+interface Reaction {
+  post_id: string;
+  type: string;
+}
 
-  async function signOut() {
-    await supabase.auth.signOut();
-    window.location.href = "/auth";
+const TYPE_CONFIG = {
+  reflection: { label: "Reflection",  emoji: "📝", color: "bg-violet-100 text-violet-700 border-violet-200" },
+  showcase:   { label: "Showcase",    emoji: "🏆", color: "bg-amber-100 text-amber-700 border-amber-200"   },
+  discovery:  { label: "Discovery",   emoji: "💡", color: "bg-sky-100 text-sky-700 border-sky-200"         },
+};
+
+const CATEGORIES = ["all", "cooking", "coding", "gardening", "money", "art", "science", "music", "writing"];
+
+// ── Floating hearts animation ─────────────────────────────────
+function FloatingHeart({ onDone }: { onDone: () => void }) {
+  useEffect(() => { const t = setTimeout(onDone, 1000); return () => clearTimeout(t); }, []);
+  return (
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+      <span className="animate-bounce text-2xl">❤️</span>
+    </div>
+  );
+}
+
+// ── Post Card ─────────────────────────────────────────────────
+function PostCard({ post, childId, myReactions, onReact }: {
+  post: Post;
+  childId: string | null;
+  myReactions: Set<string>;
+  onReact: (postId: string, type: "heart" | "thumbs_up") => void;
+}) {
+  const [showHeart, setShowHeart]   = useState(false);
+  const [showThumb, setShowThumb]   = useState(false);
+  const cfg = TYPE_CONFIG[post.type];
+  const avatar = post.child_profiles?.avatar_url || "🌱";
+  const name   = post.child_profiles?.display_name || post.child_profiles?.username || "Sprout";
+  const heartKey = `${post.id}-heart`;
+  const thumbKey = `${post.id}-thumbs_up`;
+
+  function handleHeart() {
+    if (!childId) return;
+    setShowHeart(true);
+    onReact(post.id, "heart");
+  }
+
+  function handleThumb() {
+    if (!childId) return;
+    setShowThumb(true);
+    onReact(post.id, "thumbs_up");
   }
 
   return (
-    <>
-      <header className={`sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur transition-shadow duration-200 ${scrolled ? "shadow-md" : "shadow-none"}`}>
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
-
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-4 shrink-0" onClick={closeMenu}>
-            <div className="relative h-16 w-16 rounded-full bg-white ring-2 ring-emerald-200 shadow-sm flex items-center justify-center">
-              <Image src="/logo.png" alt="SkillSprout" width={60} height={60} className="object-scale-down" priority />
-            </div>
-            <div className="leading-tight">
-              <div className="font-display text-xl font-extrabold text-slate-900 tracking-tight">SkillSprout</div>
-              <div className="text-xs text-slate-500 font-medium">Where skills grow</div>
-            </div>
-          </Link>
-
-          {/* Desktop Nav */}
-          <nav className="hidden lg:flex items-center gap-1 text-sm font-semibold text-slate-600">
-            {allNavLinks.map(({ href, label }) => (
-              <Link key={href} href={href} className="px-3 py-2 rounded-lg hover:bg-slate-100 hover:text-slate-900 transition-colors duration-150">
-                {label}
-              </Link>
-            ))}
-            {role === "admin" && (
-              <>
-                <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden="true" />
-                <Link href={ADMIN_LINK.href} className="px-3 py-2 rounded-lg text-slate-400 hover:bg-amber-50 hover:text-amber-700 transition-colors duration-150 text-xs uppercase tracking-wider">
-                  {ADMIN_LINK.label}
-                </Link>
-              </>
-            )}
-          </nav>
-
-          {/* Desktop Auth */}
-          <div className="hidden lg:flex items-center gap-2 shrink-0">
-            {role === "guest" && (
-              <>
-                <Link href="/auth?mode=signin" className="px-4 py-2 text-sm font-semibold text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">Sign In</Link>
-                <Link href="/auth?mode=signup" className="px-4 py-2 text-sm font-bold text-white bg-green-500 rounded-xl hover:bg-green-600 transition-colors shadow-sm">Get Started 🌱</Link>
-              </>
-            )}
-            {role === "admin" && (
-              <Link href="/admin" className="px-4 py-2 text-sm font-bold text-white bg-violet-600 rounded-xl hover:bg-violet-700 transition-colors shadow-sm">Admin Panel</Link>
-            )}
-            {(role === "kid" || role === "parent" || role === "admin") && (
-              <button onClick={signOut} className="px-4 py-2 text-sm font-semibold text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">
-                Sign Out
-              </button>
-            )}
+    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm hover:shadow-md transition-shadow">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-2xl border border-emerald-100">
+          {avatar}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-bold text-slate-900 text-sm">{name}</div>
+          <div className="text-xs font-semibold text-slate-400">
+            {new Date(post.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {post.courses && (
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600">
+              {post.courses.emoji} {post.courses.title}
+            </span>
+          )}
+          <span className={`rounded-full border px-2.5 py-0.5 text-xs font-bold ${cfg.color}`}>
+            {cfg.emoji} {cfg.label}
+          </span>
+        </div>
+      </div>
 
-          {/* Mobile Hamburger */}
-          <button
-            className="lg:hidden flex flex-col items-center justify-center w-10 h-10 rounded-xl hover:bg-slate-100 transition-colors gap-[5px]"
-            onClick={() => setMenuOpen((v) => !v)}
-            aria-label={menuOpen ? "Close menu" : "Open menu"}
-            aria-expanded={menuOpen}
-          >
-            <span className={`block h-0.5 w-5 bg-slate-700 rounded transition-transform duration-200 origin-center ${menuOpen ? "translate-y-[7px] rotate-45" : ""}`} />
-            <span className={`block h-0.5 w-5 bg-slate-700 rounded transition-opacity duration-200 ${menuOpen ? "opacity-0" : ""}`} />
-            <span className={`block h-0.5 w-5 bg-slate-700 rounded transition-transform duration-200 origin-center ${menuOpen ? "-translate-y-[7px] -rotate-45" : ""}`} />
+      {/* Title */}
+      {post.title && <h3 className="font-display text-lg font-bold text-slate-900 mb-2">{post.title}</h3>}
+
+      {/* Content */}
+      <p className="text-sm font-semibold text-slate-700 leading-relaxed whitespace-pre-wrap">{post.content}</p>
+
+      {/* Images */}
+      {post.images && post.images.length > 0 && (
+        <div className={`mt-3 grid gap-2 ${post.images.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+          {post.images.map((url, i) => (
+            <img key={i} src={url} alt="" className="w-full rounded-xl object-cover aspect-video border border-slate-100" />
+          ))}
+        </div>
+      )}
+
+      {/* Video */}
+      {post.video_url && (
+        <div className="mt-3 rounded-xl overflow-hidden border border-slate-100">
+          {post.video_url.includes("youtube") ? (
+            <iframe src={post.video_url.replace("watch?v=", "embed/")} className="w-full aspect-video" allowFullScreen />
+          ) : (
+            <video src={post.video_url} controls className="w-full aspect-video" />
+          )}
+        </div>
+      )}
+
+      {/* Reactions */}
+      <div className="mt-4 flex items-center gap-3 pt-3 border-t border-slate-50">
+        <div className="relative">
+          <button onClick={handleHeart} disabled={!childId}
+            className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-bold transition ${
+              myReactions.has(heartKey) ? "bg-rose-100 text-rose-600" : "bg-slate-50 text-slate-500 hover:bg-rose-50 hover:text-rose-500"
+            } disabled:opacity-40`}>
+            {myReactions.has(heartKey) ? "❤️" : "🤍"}
           </button>
+          {showHeart && <FloatingHeart onDone={() => setShowHeart(false)} />}
         </div>
-
-        {/* Mobile Menu */}
-        <div className={`lg:hidden overflow-hidden transition-all duration-300 ease-in-out ${menuOpen ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0"}`}>
-          <div className="border-t border-slate-100 bg-white px-4 pb-4 pt-2">
-            <nav className="flex flex-col gap-1 mb-4">
-              {allNavLinks.map(({ href, label }) => (
-                <Link key={href} href={href} onClick={closeMenu} className="px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors">
-                  {label}
-                </Link>
-              ))}
-              {role === "admin" && (
-                <>
-                  <div className="my-1 h-px bg-slate-100" />
-                  <Link href={ADMIN_LINK.href} onClick={closeMenu} className="px-3 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-slate-400 hover:bg-amber-50 hover:text-amber-700 transition-colors">
-                    {ADMIN_LINK.label}
-                  </Link>
-                </>
-              )}
-            </nav>
-            <div className="flex flex-col gap-2">
-              {role === "guest" ? (
-                <>
-                  <Link href="/auth?mode=signin" onClick={closeMenu} className="w-full py-2.5 text-center text-sm font-semibold text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">Sign In</Link>
-                  <Link href="/auth?mode=signup" onClick={closeMenu} className="w-full py-2.5 text-center text-sm font-bold text-white bg-green-500 rounded-xl hover:bg-green-600 transition-colors shadow-sm">Get Started 🌱</Link>
-                </>
-              ) : (
-                <button onClick={() => { signOut(); closeMenu(); }} className="w-full py-2.5 text-center text-sm font-semibold text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
-                  Sign Out
-                </button>
-              )}
-            </div>
-          </div>
+        <div className="relative">
+          <button onClick={handleThumb} disabled={!childId}
+            className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-bold transition ${
+              myReactions.has(thumbKey) ? "bg-amber-100 text-amber-600" : "bg-slate-50 text-slate-500 hover:bg-amber-50 hover:text-amber-500"
+            } disabled:opacity-40`}>
+            {myReactions.has(thumbKey) ? "👍" : "👋"}
+          </button>
+          {showThumb && <FloatingHeart onDone={() => setShowThumb(false)} />}
         </div>
-      </header>
+        {!childId && <span className="text-xs font-semibold text-slate-400">Sign in to react!</span>}
+      </div>
+    </div>
+  );
+}
 
-      {menuOpen && <div className="fixed inset-0 z-40 bg-black/20 lg:hidden" onClick={closeMenu} aria-hidden="true" />}
-    </>
+// ── Main Page ─────────────────────────────────────────────────
+export default function CommunityPage() {
+  const supabase = supabaseBrowser();
+  const [posts, setPosts]         = useState<Post[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [category, setCategory]   = useState("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [childId, setChildId]     = useState<string | null>(null);
+  const [myReactions, setMyReactions] = useState<Set<string>>(new Set());
+
+  useEffect(() => { loadData(); }, []);
+
+  async function loadData() {
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+      const { data: childRow } = await supabase
+        .from("child_profiles").select("id").eq("user_id", user.id).maybeSingle();
+      if (childRow) {
+        setChildId(childRow.id);
+        const { data: reactions } = await supabase
+          .from("post_reactions").select("post_id, type").eq("child_id", childRow.id);
+        setMyReactions(new Set((reactions ?? []).map((r: Reaction) => `${r.post_id}-${r.type}`)));
+      }
+    }
+
+    const { data } = await supabase
+      .from("community_posts")
+      .select("*, child_profiles(display_name, username, avatar_url), courses(title, emoji)")
+      .eq("status", "approved")
+      .order("created_at", { ascending: false });
+
+    setPosts((data as unknown as Post[]) ?? []);
+    setLoading(false);
+  }
+
+  async function handleReact(postId: string, type: "heart" | "thumbs_up") {
+    if (!childId) return;
+    const key = `${postId}-${type}`;
+    if (myReactions.has(key)) {
+      await supabase.from("post_reactions").delete()
+        .eq("post_id", postId).eq("child_id", childId).eq("type", type);
+      setMyReactions((prev) => { const s = new Set(prev); s.delete(key); return s; });
+    } else {
+      await supabase.from("post_reactions").insert({ post_id: postId, child_id: childId, type });
+      setMyReactions((prev) => new Set([...prev, key]));
+    }
+  }
+
+  const filtered = posts.filter((p) => {
+    const catMatch  = category === "all" || p.category === category;
+    const typeMatch = typeFilter === "all" || p.type === typeFilter;
+    return catMatch && typeMatch;
+  });
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-6 py-6 px-4">
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-500 to-indigo-600 p-8 text-white shadow-lg">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
+        <h1 className="font-display text-3xl font-black">🌱 Community</h1>
+        <p className="mt-2 text-white/80 font-semibold text-sm max-w-md">See what other learners are discovering, creating, and reflecting on!</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold">{posts.length} posts shared</span>
+          <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold">✅ All posts are reviewed before sharing</span>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="space-y-3">
+        {/* Type filter */}
+        <div className="flex flex-wrap gap-2">
+          {["all", "reflection", "showcase", "discovery"].map((t) => (
+            <button key={t} onClick={() => setTypeFilter(t)}
+              className={`rounded-xl border-2 px-3 py-1.5 text-xs font-bold transition capitalize ${
+                typeFilter === t ? "border-violet-500 bg-violet-500 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-violet-200"
+              }`}>
+              {t === "all" ? "All Types" : `${TYPE_CONFIG[t as keyof typeof TYPE_CONFIG].emoji} ${TYPE_CONFIG[t as keyof typeof TYPE_CONFIG].label}`}
+            </button>
+          ))}
+        </div>
+        {/* Category filter */}
+        <div className="flex flex-wrap gap-2">
+          {CATEGORIES.map((c) => (
+            <button key={c} onClick={() => setCategory(c)}
+              className={`rounded-xl border-2 px-3 py-1.5 text-xs font-bold transition capitalize ${
+                category === c ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-emerald-200"
+              }`}>
+              {c === "all" ? "All Categories" : c}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Posts */}
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <div className="text-4xl animate-bounce">🌱</div>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-2xl border border-slate-100 bg-white p-12 text-center">
+          <div className="text-5xl mb-3">🌱</div>
+          <p className="font-bold text-slate-400">No posts yet!</p>
+          <p className="text-sm font-semibold text-slate-400 mt-1">Complete a course unit to share your first post.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filtered.map((post) => (
+            <PostCard key={post.id} post={post} childId={childId} myReactions={myReactions} onReact={handleReact} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
