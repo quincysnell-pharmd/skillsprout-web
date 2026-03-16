@@ -14,12 +14,17 @@ const MISSION_CARDS = [
   {
     icon: "🌳",
     title: "Skills that Last",
-    body: "Each course prepares the students to create a new concept, project or product. We believe that consistant opportunities to actually work on new skills is required to really understand a new concept and increase confidence.",
+    body: "Each course prepares the students to create a new concept, project or product. We believe that consistent opportunities to actually work on new skills is required to really understand a new concept and increase confidence.",
   },
   {
     icon: "🛡️",
     title: "Safety Is Everything",
     body: "Every single feature on SkillSprout is designed with child safety at the center. Parent approvals, predefined messaging, private profiles and more. Your child's safety is never an afterthought, it's the foundation we are built on.",
+  },
+  {
+  icon: "🚀",
+  title: "A Glimpse Into the Future",
+  body: "What do you want to be when you grow up? SkillSprout helps kids explore real careers, understand what people actually do every day, and discover which paths genuinely excite them — long before they have to choose.",
   },
   {
     icon: "🌍",
@@ -173,7 +178,7 @@ export default function AboutPage() {
                 className="mt-8 border-t pt-6 text-center text-[14px] font-bold"
                 style={{ borderColor: "var(--green-light)", color: "var(--green)" }}
               >
-                — Founder, SkillSprout
+                — Quincy Snell, SkillSprout Founder
               </div>
             </div>
           </div>
