@@ -4,22 +4,27 @@ const MISSION_CARDS = [
   {
     icon: "💡",
     title: "Why SkillSprout Exists",
-    body: "Kids today are handed a path and told to follow it. But what if the best path is the one they choose themselves? SkillSprout was born from a simple belief: every child deserves the space to explore what makes them come alive — not for a grade, but for themselves.",
+    body: "Kids today are often given a path and told to follow it. But what if the best path is the one they choose themselves? SkillSprout was born from the simple belief that every child deserves the space to explore what makes them come alive. Not for a grade, but for themselves.",
   },
   {
     icon: "🏆",
     title: "What We Believe",
-    body: "Kids are so much smarter than we give them credit for. When given real autonomy — the ability to govern their own learning, move at their own pace, and pursue what genuinely excites them — they don't just learn. They thrive. We believe in getting out of their way.",
+    body: "Kids are so much smarter than we give them credit for. When given the ability to govern their own learning, move at their own pace, and pursue what genuinely excites them they don't just learn, they thrive.",
+  },
+  {
+    icon: "🌳",
+    title: "Skills that Last",
+    body: "Each course prepares the students to create a new concept, project or product. We believe that consistant opportunities to actually work on new skills is required to really understand a new concept and increase confidence.",
   },
   {
     icon: "🛡️",
     title: "Safety Is Everything",
-    body: "Every single feature on SkillSprout is designed with child safety at the center. Parent approvals, predefined messaging, private profiles — your child's safety is never an afterthought here. It's the foundation everything else is built on.",
+    body: "Every single feature on SkillSprout is designed with child safety at the center. Parent approvals, predefined messaging, private profiles and more. Your child's safety is never an afterthought, it's the foundation we are built on.",
   },
   {
     icon: "🌍",
     title: "Our Mission",
-    body: "To give every child the opportunity to discover their passions, develop real-world skills, and build the confidence to pursue a future that's truly theirs — not just the one the world expects of them.",
+    body: "We are here to give every child the opportunity to discover their passions, develop real-world skills, and build the confidence to pursue a future that's truly theirs. Allowing them to discover more than what the world expects of them.",
   },
 ];
 
@@ -59,7 +64,7 @@ export default function AboutPage() {
             }}
           >
             A safe place where curious kids discover who they are, what they love,
-            and where they want to grow — on their own terms.
+            and where they want to grow. All on their own terms.
           </p>
         </div>
       </section>
@@ -124,36 +129,43 @@ export default function AboutPage() {
                 style={{ fontSize: 16, color: "#374151", lineHeight: 1.8 }}
               >
                 <p>
-                  "Being a mom changed everything for me. Watching my child light up when they
-                  discover something they genuinely love — not because a teacher told them to care
-                  about it, but because <em>they</em> actually care — that's something I want every
-                  kid to experience.
+                  "Being a mom changed everything for me. I want more than anything for my children to have the chance to discover what brings them joy
+                  and to discover the things they genuinely love. Not because the world told them to care
+                  about it, but because it's the things that <em>they</em> actually care about. That's something I want every
+                  kid to experience and I think that every child deserves.
                 </p>
 
                 <p>
-                  I kept asking myself: why don't kids have a place to just <em>try things</em>?
+                  I kept asking myself: Why don't kids have a place to just <em>try things</em>?
                   Not for a grade. Not to check a box. Just to see what they're drawn to, to
-                  build something with their hands, to figure out who they are before the world
+                  build something that they have dreamed of, and to figure out who they are before the world
                   tries to decide for them.
                 </p>
 
                 <p>
                   I believe kids have so much more going on inside them than we give them credit
-                  for. They're curious, they're capable, and when you give them real autonomy —
-                  the ability to govern their own learning, to pursue what brings them joy — they
-                  surprise you every single time.
+                  for. They're curious, they're capable, and when you give them real autonomy,
+                  the ability to govern their own learning, to pursue what brings them joy I believe they
+                  will surprise you every single time.
                 </p>
 
                 <p>
                   SkillSprout isn't about keeping kids busy. It's about helping them find the
                   things that make them feel most alive. The cooking, the coding, the gardening,
-                  the investing — those are just doors. What's behind each door is a kid
+                  the investing and so much more. Each of these experiences are doors. What's behind each door is a kid
                   discovering something real about themselves.
                 </p>
 
                 <p>
-                  I built this for my kid. And I built it for yours. Welcome to the place where
-                  skills — and kids — get to grow. 🌱"
+                  Skillsprout emphasizes the importance of community. Here we offer safe, parent and administrator approved, opportunities
+                  for children to share the skills that they are learning. Through sharing reflections, projects and other course outcomes. 
+                  We understand the importance of sharing ideas and experiences in the endeavor of learning more, developing new skills and 
+                  continually working to improve the world.
+                </p>
+
+                <p>
+                  I built this for my kids. And I built it for yours. Welcome to the place where
+                  skills, and kids, get to grow. 🌱"
                 </p>
               </div>
 
@@ -189,7 +201,7 @@ export default function AboutPage() {
                 color: "var(--green-dark)",
                 bg: "var(--green-bg)",
                 border: "var(--green-light)",
-                body: "Kids should govern their own learning. No grades, no pressure — just the freedom to explore what excites them and build skills that actually matter to them.",
+                body: "Kids should govern their own learning. No grades and no pressure. Just the freedom to explore what excites them and build skills that actually matter to them.",
               },
               {
                 emoji: "❤️",
@@ -197,7 +209,7 @@ export default function AboutPage() {
                 color: "var(--gold-dark)",
                 bg: "var(--gold-light)",
                 border: "#fde68a",
-                body: "If it doesn't bring joy, it won't last. Every course, challenge, and career exploration is designed to feel fun — because passion is the only motivation that sticks.",
+                body: "If it doesn't bring joy, it won't last. Every course, challenge, and career exploration is designed to feel fun while allowing students to create true products with the skills they are learning. Because passion is the only motivation that sticks.",
               },
               {
                 emoji: "🛡️",
@@ -205,7 +217,7 @@ export default function AboutPage() {
                 color: "#1e40af",
                 bg: "#eff6ff",
                 border: "#bfdbfe",
-                body: "Parents are partners, not spectators. Every feature is built with families in mind — from post approvals to predefined messaging to private profiles.",
+                body: "Parents are partners, not spectators. Every feature is built with families in mind. From post approvals to predefined messaging to private profiles.",
               },
             ].map((v) => (
               <div
