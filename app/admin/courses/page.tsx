@@ -15,12 +15,16 @@ interface Course {
   is_published: boolean;
   price_cents: number;
   stripe_price_id: string;
+  topics: string[];
+  prerequisites: string[];
 }
 
 const BLANK: Omit<Course, "id"> = {
   title: "", slug: "", description: "", category: "cooking",
   level: "seed", duration_minutes: 60, is_published: false,
   price_cents: 0, stripe_price_id: "",
+  topics: [""],
+  prerequisites: [""],
 };
 
 const CATEGORIES = ["cooking","coding","gardening","money","art","science","music","writing"];
@@ -40,13 +44,14 @@ const LEVEL_ORDER: Record<string, number> = {
 
 export default function AdminCourses() {
   const supabase = supabaseBrowser();
-  const [rows, setRows]       = useState<Course[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [modal, setModal]     = useState(false);
-  const [editing, setEditing] = useState<Course | null>(null);
-  const [form, setForm]       = useState<Omit<Course, "id">>(BLANK);
-  const [busy, setBusy]       = useState(false);
+  const [rows, setRows]           = useState<Course[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [modal, setModal]         = useState(false);
+  const [editing, setEditing]     = useState<Course | null>(null);
+  const [form, setForm]           = useState<Omit<Course, "id">>(BLANK);
+  const [busy, setBusy]           = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [priceInput, setPriceInput] = useState("0.00");
 
   useEffect(() => { load(); }, []);
 
@@ -57,11 +62,40 @@ export default function AdminCourses() {
     setLoading(false);
   }
 
-  function openAdd() { setEditing(null); setForm(BLANK); setModal(true); setSaveError(null); }
-  function openEdit(row: Course) { setEditing(row); setForm({ ...row }); setModal(true); setSaveError(null); }
+  function openAdd() {
+    setEditing(null);
+    setForm(BLANK);
+    setPriceInput("0.00");
+    setModal(true);
+    setSaveError(null);
+  }
+
+  function openEdit(row: Course) {
+    setEditing(row);
+    setForm({ ...row, topics: row.topics?.length ? row.topics : [""], prerequisites: row.prerequisites?.length ? row.prerequisites : [""] });
+    setPriceInput(((row.price_cents ?? 0) / 100).toFixed(2));
+    setModal(true);
+    setSaveError(null);
+  }
 
   function set(key: keyof Omit<Course,"id">, val: unknown) {
     setForm((f) => ({ ...f, [key]: val }));
+  }
+
+  function setArrayItem(key: "topics" | "prerequisites", idx: number, val: string) {
+    setForm(f => {
+      const arr = [...(f[key] as string[])];
+      arr[idx] = val;
+      return { ...f, [key]: arr };
+    });
+  }
+
+  function addArrayItem(key: "topics" | "prerequisites") {
+    setForm(f => ({ ...f, [key]: [...(f[key] as string[]), ""] }));
+  }
+
+  function removeArrayItem(key: "topics" | "prerequisites", idx: number) {
+    setForm(f => ({ ...f, [key]: (f[key] as string[]).filter((_, i) => i !== idx) }));
   }
 
   async function save() {
@@ -69,12 +103,18 @@ export default function AdminCourses() {
     setBusy(true);
     setSaveError(null);
 
+    const clean = {
+      ...form,
+      topics: form.topics.filter((t: string) => t.trim()),
+      prerequisites: form.prerequisites.filter((p: string) => p.trim()),
+    };
+
     if (editing) {
-      const { error } = await supabase.from("courses").update(form).eq("id", editing.id);
+      const { error } = await supabase.from("courses").update(clean).eq("id", editing.id);
       if (error) { setSaveError(error.message); setBusy(false); return; }
     } else {
       const slug = form.slug.trim() || form.title.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-      const { error } = await supabase.from("courses").insert({ ...form, slug });
+      const { error } = await supabase.from("courses").insert({ ...clean, slug });
       if (error) { setSaveError(error.message); setBusy(false); return; }
     }
 
@@ -88,7 +128,6 @@ export default function AdminCourses() {
     setRows((r) => r.filter((x) => x.id !== id));
   }
 
-  // Convert minutes to hours for display
   function formatDuration(minutes: number) {
     if (minutes < 60) return `${minutes}m`;
     const h = Math.floor(minutes / 60);
@@ -146,8 +185,51 @@ export default function AdminCourses() {
             <input className={inputCls} value={form.slug} onChange={(e) => set("slug", e.target.value)} placeholder="e.g. kitchen-basics" />
           </Field>
           <Field label="Description">
-            <textarea className={textareaCls} rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="What will kids learn?" />
+            <textarea className={textareaCls} rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="What will kids learn in this course?" />
           </Field>
+
+          {/* What students will learn */}
+          <Field label="✅ What Students Will Learn">
+            <div className="space-y-2">
+              {form.topics.map((t: string, i: number) => (
+                <div key={i} className="flex gap-2">
+                  <input className={inputCls} value={t}
+                    onChange={e => setArrayItem("topics", i, e.target.value)}
+                    placeholder={`e.g. How to safely use a knife`} />
+                  {form.topics.length > 1 && (
+                    <button onClick={() => removeArrayItem("topics", i)}
+                      className="rounded-xl border border-rose-200 px-3 text-rose-500 hover:bg-rose-50 transition text-sm font-bold">✕</button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button onClick={() => addArrayItem("topics")}
+              className="mt-2 rounded-xl border-2 border-dashed border-slate-200 w-full py-2 text-sm font-bold text-slate-500 hover:border-emerald-300 hover:text-emerald-600 transition">
+              + Add Learning Outcome
+            </button>
+          </Field>
+
+          {/* Prerequisites */}
+          <Field label="🌱 Good to Know Before Starting">
+            <div className="space-y-2">
+              {form.prerequisites.map((p: string, i: number) => (
+                <div key={i} className="flex gap-2">
+                  <input className={inputCls} value={p}
+                    onChange={e => setArrayItem("prerequisites", i, e.target.value)}
+                    placeholder={`e.g. No experience needed` } />
+                  {form.prerequisites.length > 1 && (
+                    <button onClick={() => removeArrayItem("prerequisites", i)}
+                      className="rounded-xl border border-rose-200 px-3 text-rose-500 hover:bg-rose-50 transition text-sm font-bold">✕</button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button onClick={() => addArrayItem("prerequisites")}
+              className="mt-2 rounded-xl border-2 border-dashed border-slate-200 w-full py-2 text-sm font-bold text-slate-500 hover:border-amber-300 hover:text-amber-600 transition">
+              + Add Prerequisite
+            </button>
+          </Field>
+
           <div className="grid grid-cols-2 gap-4">
             <Field label="Category">
               <select className={selectCls} value={form.category} onChange={(e) => set("category", e.target.value)}>
@@ -160,6 +242,7 @@ export default function AdminCourses() {
               </select>
             </Field>
           </div>
+
           <Field label="Duration (hours)">
             <div className="flex items-center gap-3">
               <input
@@ -175,21 +258,36 @@ export default function AdminCourses() {
               </span>
             </div>
           </Field>
+
           <Field label="Price (USD)">
             <div className="flex items-center gap-3">
               <span className="text-sm font-semibold text-slate-500">$</span>
               <input
                 className={inputCls}
-                type="number"
-                min={0}
-                step={0.01}
-                value={(form.price_cents / 100).toFixed(2)}
-                onChange={(e) => set("price_cents", Math.round(Number(e.target.value) * 100))}
+                type="text"
+                inputMode="decimal"
+                value={priceInput}
+                onChange={(e) => {
+                  setPriceInput(e.target.value);
+                  const parsed = parseFloat(e.target.value);
+                  if (!isNaN(parsed)) set("price_cents", Math.round(parsed * 100));
+                }}
+                onBlur={() => {
+                  const parsed = parseFloat(priceInput);
+                  if (!isNaN(parsed)) {
+                    setPriceInput(parsed.toFixed(2));
+                    set("price_cents", Math.round(parsed * 100));
+                  } else {
+                    setPriceInput("0.00");
+                    set("price_cents", 0);
+                  }
+                }}
                 placeholder="0.00"
               />
               {form.price_cents === 0 && <span className="text-xs font-bold text-emerald-600">Free</span>}
             </div>
           </Field>
+
           <Field label="Stripe Price ID">
             <input
               className={inputCls}
@@ -198,6 +296,7 @@ export default function AdminCourses() {
               placeholder="price_1... (from Stripe dashboard)"
             />
           </Field>
+
           <Field label="Status">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -209,6 +308,7 @@ export default function AdminCourses() {
               <span className="text-sm font-semibold text-slate-700">Published (visible to kids)</span>
             </label>
           </Field>
+
           {saveError && (
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
               ❌ {saveError}
