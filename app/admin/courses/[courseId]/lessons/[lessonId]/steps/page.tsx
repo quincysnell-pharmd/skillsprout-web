@@ -178,7 +178,7 @@ function StepForm({ step, onSave, onCancel, lessonId }: {
                 <label className="block text-xs font-bold text-slate-600 mb-1.5">Image</label>
                 {form.image_url ? (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 flex items-center gap-3">
-                    <img src={form.image_url} className="h-12 w-16 object-cover rounded-lg" />
+                    <img src={form.image_url} className="h-12 w-16 object-cover rounded-lg" alt="" />
                     <div className="flex-1 min-w-0"><div className="text-sm font-bold text-emerald-700">Image ready ✓</div></div>
                     <button onClick={() => set("image_url", "")} className="text-xs font-bold text-rose-500 hover:text-rose-700">Remove</button>
                   </div>
@@ -423,7 +423,15 @@ export default function AdminLessonStepsPage() {
     ]);
     setLesson(lessonData as Lesson);
     setCourse(courseData as Course);
-    setSteps((stepsData as Step[]) ?? []);
+    const loadedSteps = (stepsData as Step[]) ?? [];
+    // Fix any gaps in order_index on load
+    for (let i = 0; i < loadedSteps.length; i++) {
+      if (loadedSteps[i].order_index !== i) {
+        await supabase.from("lesson_steps").update({ order_index: i }).eq("id", loadedSteps[i].id);
+        loadedSteps[i] = { ...loadedSteps[i], order_index: i };
+      }
+    }
+    setSteps(loadedSteps);
     setLoading(false);
   }
 
@@ -446,7 +454,6 @@ export default function AdminLessonStepsPage() {
       }).select().maybeSingle();
 
       if (newStep) {
-        // Save extras for poll/checklist/matching
         if (form.type === "poll" && extras.pollOptions?.length) {
           await supabase.from("lesson_step_poll_options").insert(
             extras.pollOptions.map(o => ({ step_id: newStep.id, label: o.label, order_index: o.order_index }))
@@ -472,7 +479,14 @@ export default function AdminLessonStepsPage() {
   async function deleteStep(id: string) {
     if (!confirm("Delete this step?")) return;
     await supabase.from("lesson_steps").delete().eq("id", id);
-    setSteps(prev => prev.filter(s => s.id !== id));
+    // Renumber remaining steps sequentially to avoid order_index conflicts
+    const remaining = steps.filter(s => s.id !== id);
+    for (let i = 0; i < remaining.length; i++) {
+      if (remaining[i].order_index !== i) {
+        await supabase.from("lesson_steps").update({ order_index: i }).eq("id", remaining[i].id);
+      }
+    }
+    setSteps(remaining.map((s, i) => ({ ...s, order_index: i })));
   }
 
   async function moveStep(id: string, dir: "up" | "down") {
@@ -545,23 +559,16 @@ export default function AdminLessonStepsPage() {
             const cfg = STEP_TYPES.find(t => t.type === step.type)!;
             return (
               <div key={step.id} className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm hover:shadow-md transition">
-                {/* Order badge */}
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 font-black text-slate-600 text-sm">
                   {i + 1}
                 </div>
-
-                {/* Type badge */}
                 <div className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold shrink-0 ${cfg.color}`}>
                   {cfg.icon} {cfg.label}
                 </div>
-
-                {/* Title */}
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-slate-800 truncate">{step.title || `${cfg.label} step`}</div>
                   {step.content && <div className="text-xs font-semibold text-slate-400 truncate mt-0.5">{step.content.slice(0, 80)}...</div>}
                 </div>
-
-                {/* Actions */}
                 <div className="flex items-center gap-1 shrink-0">
                   <button onClick={() => moveStep(step.id, "up")} disabled={i === 0 || busy === step.id}
                     className="rounded-lg border border-slate-200 p-2 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-30 transition">↑</button>
@@ -578,7 +585,6 @@ export default function AdminLessonStepsPage() {
         </div>
       )}
 
-      {/* Preview note */}
       {steps.length > 0 && (
         <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 flex items-center gap-3">
           <span className="text-xl">👁️</span>
@@ -586,7 +592,6 @@ export default function AdminLessonStepsPage() {
         </div>
       )}
 
-      {/* Step form modal */}
       {editingStep && (
         <StepForm
           step={editingStep}
