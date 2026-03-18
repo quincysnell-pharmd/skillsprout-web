@@ -495,13 +495,18 @@ export default function AdminLessonStepsPage() {
     if (dir === "down" && idx === steps.length - 1) return;
     setBusy(id);
     const swapIdx = dir === "up" ? idx - 1 : idx + 1;
-    const swapStep = steps[swapIdx];
-    const currentStep = steps[idx];
-    await Promise.all([
-      supabase.from("lesson_steps").update({ order_index: swapStep.order_index }).eq("id", currentStep.id),
-      supabase.from("lesson_steps").update({ order_index: currentStep.order_index }).eq("id", swapStep.id),
-    ]);
-    await loadData();
+    // Build new order optimistically
+    const newSteps = [...steps];
+    const temp = newSteps[idx];
+    newSteps[idx] = newSteps[swapIdx];
+    newSteps[swapIdx] = temp;
+    // Renumber sequentially
+    const renumbered = newSteps.map((s, i) => ({ ...s, order_index: i }));
+    setSteps(renumbered);
+    // Save to DB
+    await Promise.all(
+      renumbered.map(s => supabase.from("lesson_steps").update({ order_index: s.order_index }).eq("id", s.id))
+    );
     setBusy(null);
   }
 
