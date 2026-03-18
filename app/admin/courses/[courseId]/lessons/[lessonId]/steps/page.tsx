@@ -423,15 +423,7 @@ export default function AdminLessonStepsPage() {
     ]);
     setLesson(lessonData as Lesson);
     setCourse(courseData as Course);
-    const loadedSteps = (stepsData as Step[]) ?? [];
-    // Fix any gaps in order_index on load
-    for (let i = 0; i < loadedSteps.length; i++) {
-      if (loadedSteps[i].order_index !== i) {
-        await supabase.from("lesson_steps").update({ order_index: i }).eq("id", loadedSteps[i].id);
-        loadedSteps[i] = { ...loadedSteps[i], order_index: i };
-      }
-    }
-    setSteps(loadedSteps);
+    setSteps((stepsData as Step[]) ?? []);
     setLoading(false);
   }
 
