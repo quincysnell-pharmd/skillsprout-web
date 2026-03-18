@@ -496,9 +496,11 @@ export default function AdminLessonStepsPage() {
     const renumbered = newSteps.map((s, i) => ({ ...s, order_index: i }));
     setSteps(renumbered);
     // Save to DB
-    await Promise.all(
+    const results = await Promise.all(
       renumbered.map(s => supabase.from("lesson_steps").update({ order_index: s.order_index }).eq("id", s.id))
     );
+    const errors = results.filter(r => r.error);
+    if (errors.length > 0) alert("Save error: " + errors[0].error?.message);
     setBusy(null);
   }
 
