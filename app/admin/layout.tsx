@@ -30,12 +30,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         if (user) userId = user.id;
       }
 
-      if (!userId) { router.replace("/auth"); return; }
+      if (!userId) { alert("No userId found"); router.replace("/auth"); return; }
 
-      const { data: adminRow } = await supabase
+      const { data: adminRow, error: adminError } = await supabase
         .from("admins").select("id").eq("user_id", userId).maybeSingle();
 
-      if (!adminRow) { router.replace("/auth"); return; }
+      if (adminError) { alert("Admin query error: " + adminError.message); }
+      if (!adminRow) { alert("No admin row for userId: " + userId); router.replace("/auth"); return; }
 
       setIsAdmin(true);
     } catch (err) {
