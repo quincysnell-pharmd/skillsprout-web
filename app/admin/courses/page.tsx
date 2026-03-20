@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
 import { CMSTable, CMSModal, Field, inputCls, selectCls, textareaCls } from "../components/CMSTable";
 
@@ -44,6 +45,7 @@ const LEVEL_ORDER: Record<string, number> = {
 
 export default function AdminCourses() {
   const supabase = supabaseBrowser();
+  const router = useRouter();
   const [rows, setRows]           = useState<Course[]>([]);
   const [loading, setLoading]     = useState(true);
   const [modal, setModal]         = useState(false);
@@ -162,10 +164,10 @@ export default function AdminCourses() {
           {
             key: "id", label: "Lessons",
             render: (r) => (
-              <a href={`/admin/courses/${r.id}/lessons`}
+              <button onClick={() => router.push(`/admin/courses/${r.id}/lessons`)}
                 className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700 hover:bg-violet-100 transition whitespace-nowrap">
                 Manage →
-              </a>
+              </button>
             ),
           },
         ]}
