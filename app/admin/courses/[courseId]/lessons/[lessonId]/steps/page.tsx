@@ -1,604 +1,687 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
 
-// ── Types ─────────────────────────────────────────────────────
-type StepType = "text"|"video"|"pdf"|"image"|"audio"|"quiz"|"poll"|"matching"|"checklist"|"reflection"|"interactive"|"portfolio"|"journal";
-
-interface Step {
+// ── Types ──────────────────────────────────────────────────────────────────
+interface Course {
   id: string;
-  lesson_id: string;
-  order_index: number;
-  type: StepType;
-  title?: string;
-  content?: string;
-  video_url?: string;
-  pdf_url?: string;
-  image_url?: string;
-  audio_url?: string;
-  image_caption?: string;
+  title: string;
+  emoji?: string;
 }
 
-interface PollOption { id?: string; label: string; order_index: number; }
-interface ChecklistItem { id?: string; label: string; order_index: number; }
-interface MatchingPair { id?: string; left_item: string; right_item: string; order_index: number; }
-interface Lesson { id: string; title: string; order_index: number; }
-interface Course { id: string; title: string; }
+interface Lesson {
+  id: string;
+  course_id: string;
+  title: string;
+  description: string;
+  order_index: number;
+  video_url: string;
+  video_duration: number;
+  content: string;
+  is_published: boolean;
+  xp_reward: number;
+  quiz_question_count: number;
+}
 
-const STEP_TYPES: { type: StepType; icon: string; label: string; color: string }[] = [
-  { type: "text",        icon: "📝", label: "Text",           color: "bg-slate-50 border-slate-200 text-slate-700"    },
-  { type: "video",       icon: "🎬", label: "Video",          color: "bg-rose-50 border-rose-200 text-rose-700"       },
-  { type: "pdf",         icon: "📄", label: "PDF",            color: "bg-amber-50 border-amber-200 text-amber-700"    },
-  { type: "image",       icon: "🖼️", label: "Image",          color: "bg-sky-50 border-sky-200 text-sky-700"          },
-  { type: "audio",       icon: "🎤", label: "Audio",          color: "bg-purple-50 border-purple-200 text-purple-700" },
-  { type: "quiz",        icon: "❓", label: "Quiz",           color: "bg-violet-50 border-violet-200 text-violet-700" },
-  { type: "poll",        icon: "📊", label: "Poll",           color: "bg-indigo-50 border-indigo-200 text-indigo-700" },
-  { type: "matching",    icon: "🔢", label: "Matching",       color: "bg-teal-50 border-teal-200 text-teal-700"       },
-  { type: "checklist",   icon: "✅", label: "Checklist",      color: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-  { type: "reflection",  icon: "💬", label: "Reflection",     color: "bg-pink-50 border-pink-200 text-pink-700"       },
-  { type: "interactive", icon: "🎮", label: "Community Post", color: "bg-orange-50 border-orange-200 text-orange-700" },
-  { type: "portfolio",   icon: "📈", label: "Portfolio",      color: "bg-green-50 border-green-200 text-green-700"    },
-  { type: "journal",     icon: "✏️", label: "Journal Prompt", color: "bg-yellow-50 border-yellow-200 text-yellow-700"  },
-];
+interface QuizQuestion {
+  id: string;
+  lesson_id: string;
+  question: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  correct: "a" | "b" | "c" | "d";
+  explanation: string;
+  order_index: number;
+}
 
-const inputCls = "w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100 transition";
-const textareaCls = inputCls + " resize-none";
+interface LessonFile {
+  id: string;
+  lesson_id: string;
+  name: string;
+  url: string;
+  file_type: string;
+  size_bytes: number;
+}
 
-// ── Step Form ─────────────────────────────────────────────────
-function StepForm({ step, onSave, onCancel, lessonId }: {
-  step: Partial<Step> & { type: StepType };
-  onSave: (step: Partial<Step>, extras: { pollOptions?: PollOption[]; checklistItems?: ChecklistItem[]; matchingPairs?: MatchingPair[] }) => Promise<void>;
-  onCancel: () => void;
-  lessonId: string;
-}) {
-  const [form, setForm] = useState<Partial<Step>>({ ...step });
-  const [pollOptions, setPollOptions]     = useState<PollOption[]>([{ label: "", order_index: 0 }, { label: "", order_index: 1 }]);
-  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([{ label: "", order_index: 0 }]);
-  const [matchingPairs, setMatchingPairs] = useState<MatchingPair[]>([{ left_item: "", right_item: "", order_index: 0 }]);
-  const [busy, setBusy] = useState(false);
-  const [uploading, setUploading] = useState(false);
+interface Project {
+  id: string;
+  course_id: string;
+  title: string;
+  description: string;
+  instructions: string;
+  order_index: number;
+  xp_reward: number;
+}
 
-  const cfg = STEP_TYPES.find(t => t.type === step.type)!;
+const BLANK_LESSON: Omit<Lesson, "id"> = {
+  course_id: "", title: "", description: "", order_index: 0,
+  video_url: "", video_duration: 0, content: "", is_published: false,
+  xp_reward: 15, quiz_question_count: 5,
+};
+
+const BLANK_QUIZ: Omit<QuizQuestion, "id"> = {
+  lesson_id: "", question: "", option_a: "", option_b: "", option_c: "", option_d: "",
+  correct: "a", explanation: "", order_index: 0,
+};
+
+const BLANK_PROJECT: Omit<Project, "id"> = {
+  course_id: "", title: "", description: "", instructions: "", order_index: 0, xp_reward: 50,
+};
+
+const inputCls = "w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100 transition";
+const textareaCls = `${inputCls} resize-none`;
+const labelCls = "block text-xs font-bold text-slate-600 mb-1.5";
+
+// ── QUIZ EDITOR ────────────────────────────────────────────────────────────
+function QuizEditor({ lessonId, onClose }: { lessonId: string; onClose: () => void }) {
   const supabase = supabaseBrowser();
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [form, setForm] = useState<Omit<QuizQuestion, "id">>({ ...BLANK_QUIZ, lesson_id: lessonId });
+  const [editing, setEditing] = useState<QuizQuestion | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  async function uploadFile(file: File, bucket: string, field: keyof Step) {
-    setUploading(true);
-    const ext = file.name.split(".").pop();
-    const path = `steps/${lessonId}/${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from(bucket).upload(path, file);
-    if (error) { alert("Upload failed: " + error.message); setUploading(false); return; }
-    const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(path);
-    set(field, publicUrl);
-    setUploading(false);
+  useEffect(() => { loadQuestions(); }, [lessonId]);
+
+  async function loadQuestions() {
+    const { data } = await supabase.from("quiz_questions").select("*").eq("lesson_id", lessonId).order("order_index");
+    setQuestions((data as QuizQuestion[]) ?? []);
   }
 
-  function set(key: keyof Step, val: unknown) { setForm(f => ({ ...f, [key]: val })); }
+  function set(key: keyof Omit<QuizQuestion, "id">, val: string | number) {
+    setForm((f) => ({ ...f, [key]: val }));
+  }
 
-  async function handleSave() {
+  async function save() {
+    if (!form.question.trim() || !form.option_a.trim() || !form.option_b.trim()) return;
     setBusy(true);
-    await onSave(form, { pollOptions, checklistItems, matchingPairs });
+    if (editing) {
+      await supabase.from("quiz_questions").update(form).eq("id", editing.id);
+    } else {
+      await supabase.from("quiz_questions").insert({ ...form, order_index: questions.length });
+    }
+    await loadQuestions();
+    setForm({ ...BLANK_QUIZ, lesson_id: lessonId });
+    setEditing(null);
     setBusy(false);
   }
 
+  async function del(id: string) {
+    await supabase.from("quiz_questions").delete().eq("id", id);
+    setQuestions((q) => q.filter((x) => x.id !== id));
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className={`flex items-center justify-between px-6 py-4 border-b border-slate-100`}>
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">{cfg.icon}</span>
-            <div>
-              <h2 className="font-display text-lg font-black text-slate-900">{cfg.label} Step</h2>
-              <p className="text-xs font-semibold text-slate-400">Fill in the content for this step</p>
-            </div>
-          </div>
-          <button onClick={onCancel} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 transition">✕</button>
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-black/40 backdrop-blur-sm overflow-y-auto">
+      <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl my-8">
+        <div className="flex items-center justify-between p-6 border-b border-slate-100">
+          <h2 className="font-display text-xl font-bold text-slate-900">⚡ Quiz Questions</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-          {/* Title (all types) */}
+        {questions.length > 0 && (
+          <div className="p-6 space-y-3 border-b border-slate-100">
+            {questions.map((q, i) => (
+              <div key={q.id} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <div className="font-bold text-sm text-slate-800">{i + 1}. {q.question}</div>
+                    <div className="mt-2 grid grid-cols-2 gap-1">
+                      {(["a","b","c","d"] as const).map((opt) => q[`option_${opt}` as keyof QuizQuestion] && (
+                        <div key={opt} className={`text-xs font-semibold rounded-lg px-2 py-1 ${q.correct === opt ? "bg-emerald-100 text-emerald-700" : "bg-white text-slate-500 border border-slate-200"}`}>
+                          {opt.toUpperCase()}. {q[`option_${opt}` as keyof QuizQuestion] as string}
+                          {q.correct === opt && " ✓"}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={() => { setEditing(q); setForm({ ...q }); }}
+                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100">Edit</button>
+                    <button onClick={() => del(q.id)}
+                      className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50">Delete</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="p-6 space-y-4">
+          <h3 className="font-bold text-slate-700">{editing ? "Edit Question" : "Add Question"}</h3>
           <div>
-            <label className="block text-xs font-bold text-slate-600 mb-1.5">Step Title <span className="text-slate-400">(optional)</span></label>
-            <input className={inputCls} value={form.title ?? ""} onChange={e => set("title", e.target.value)} placeholder={`e.g. ${cfg.label} title...`} />
+            <label className={labelCls}>Question *</label>
+            <input className={inputCls} value={form.question} onChange={(e) => set("question", e.target.value)} placeholder="e.g. What temperature does water boil at?" />
           </div>
-
-          {/* TEXT */}
-          {step.type === "text" && (
-            <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1.5">Content (Markdown supported)</label>
-              <textarea className={textareaCls} rows={8} value={form.content ?? ""} onChange={e => set("content", e.target.value)} placeholder="Write your lesson content here...&#10;&#10;## Heading&#10;- Bullet point&#10;**Bold text**" />
-            </div>
-          )}
-
-          {/* VIDEO */}
-          {step.type === "video" && (
-            <>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">Video</label>
-                {form.video_url ? (
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 flex items-center gap-3">
-                    <span className="text-2xl">🎬</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-emerald-700">Video ready ✓</div>
-                      <div className="text-xs text-emerald-600 truncate">{form.video_url}</div>
-                    </div>
-                    <button onClick={() => set("video_url", "")} className="text-xs font-bold text-rose-500 hover:text-rose-700">Remove</button>
-                  </div>
-                ) : (
-                  <label className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-5 cursor-pointer hover:border-rose-300 hover:bg-rose-50 transition">
-                    {uploading ? <><div className="text-2xl animate-spin">⚙️</div><span className="text-sm font-bold text-rose-600">Uploading…</span></>
-                      : <><span className="text-3xl">🎬</span><span className="text-sm font-bold text-slate-600">Click to upload video</span><span className="text-xs text-slate-400">MP4, MOV, WebM</span></>}
-                    <input type="file" className="hidden" accept="video/*" disabled={uploading}
-                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f, "course-videos", "video_url"); }} />
-                  </label>
-                )}
-                <input className={`${inputCls} mt-2`} value={form.video_url ?? ""} onChange={e => set("video_url", e.target.value)} placeholder="Or paste a YouTube, Vimeo, or mp4 URL" />
+          <div className="grid grid-cols-2 gap-3">
+            {(["a","b","c","d"] as const).map((opt) => (
+              <div key={opt}>
+                <label className={labelCls}>Option {opt.toUpperCase()} {opt === "a" || opt === "b" ? "*" : "(optional)"}</label>
+                <input className={inputCls} value={form[`option_${opt}` as keyof typeof form] as string}
+                  onChange={(e) => set(`option_${opt}` as keyof Omit<QuizQuestion,"id">, e.target.value)}
+                  placeholder={`Option ${opt.toUpperCase()}`} />
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">Caption / Notes <span className="text-slate-400">(optional)</span></label>
-                <textarea className={textareaCls} rows={3} value={form.content ?? ""} onChange={e => set("content", e.target.value)} placeholder="Any notes about this video..." />
-              </div>
-            </>
-          )}
-
-          {/* PDF */}
-          {step.type === "pdf" && (
-            <>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">PDF File</label>
-                {form.pdf_url ? (
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 flex items-center gap-3">
-                    <span className="text-2xl">📄</span>
-                    <div className="flex-1 min-w-0"><div className="text-sm font-bold text-emerald-700">PDF ready ✓</div><div className="text-xs text-emerald-600 truncate">{form.pdf_url}</div></div>
-                    <button onClick={() => set("pdf_url", "")} className="text-xs font-bold text-rose-500 hover:text-rose-700">Remove</button>
-                  </div>
-                ) : (
-                  <label className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-5 cursor-pointer hover:border-amber-300 hover:bg-amber-50 transition">
-                    {uploading ? <><div className="text-2xl animate-spin">⚙️</div><span className="text-sm font-bold text-amber-600">Uploading…</span></>
-                      : <><span className="text-3xl">📄</span><span className="text-sm font-bold text-slate-600">Click to upload PDF</span></>}
-                    <input type="file" className="hidden" accept=".pdf" disabled={uploading}
-                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f, "course-files", "pdf_url"); }} />
-                  </label>
-                )}
-                <input className={`${inputCls} mt-2`} value={form.pdf_url ?? ""} onChange={e => set("pdf_url", e.target.value)} placeholder="Or paste a PDF URL" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">Description <span className="text-slate-400">(optional)</span></label>
-                <textarea className={textareaCls} rows={2} value={form.content ?? ""} onChange={e => set("content", e.target.value)} placeholder="What's in this PDF?" />
-              </div>
-            </>
-          )}
-
-          {/* IMAGE */}
-          {step.type === "image" && (
-            <>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">Image</label>
-                {form.image_url ? (
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 flex items-center gap-3">
-                    <img src={form.image_url} className="h-12 w-16 object-cover rounded-lg" alt="" />
-                    <div className="flex-1 min-w-0"><div className="text-sm font-bold text-emerald-700">Image ready ✓</div></div>
-                    <button onClick={() => set("image_url", "")} className="text-xs font-bold text-rose-500 hover:text-rose-700">Remove</button>
-                  </div>
-                ) : (
-                  <label className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-5 cursor-pointer hover:border-sky-300 hover:bg-sky-50 transition">
-                    {uploading ? <><div className="text-2xl animate-spin">⚙️</div><span className="text-sm font-bold text-sky-600">Uploading…</span></>
-                      : <><span className="text-3xl">🖼️</span><span className="text-sm font-bold text-slate-600">Click to upload image</span><span className="text-xs text-slate-400">JPG, PNG, WebP, GIF</span></>}
-                    <input type="file" className="hidden" accept="image/*" disabled={uploading}
-                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f, "course-files", "image_url"); }} />
-                  </label>
-                )}
-                <input className={`${inputCls} mt-2`} value={form.image_url ?? ""} onChange={e => set("image_url", e.target.value)} placeholder="Or paste an image URL" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">Caption <span className="text-slate-400">(optional)</span></label>
-                <input className={inputCls} value={form.image_caption ?? ""} onChange={e => set("image_caption", e.target.value)} placeholder="Describe the image..." />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">Additional Notes <span className="text-slate-400">(optional)</span></label>
-                <textarea className={textareaCls} rows={2} value={form.content ?? ""} onChange={e => set("content", e.target.value)} placeholder="Any context for students?" />
-              </div>
-            </>
-          )}
-
-          {/* AUDIO */}
-          {step.type === "audio" && (
-            <>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">Audio File</label>
-                {form.audio_url ? (
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 flex items-center gap-3">
-                    <span className="text-2xl">🎤</span>
-                    <div className="flex-1 min-w-0"><div className="text-sm font-bold text-emerald-700">Audio ready ✓</div><div className="text-xs text-emerald-600 truncate">{form.audio_url}</div></div>
-                    <button onClick={() => set("audio_url", "")} className="text-xs font-bold text-rose-500 hover:text-rose-700">Remove</button>
-                  </div>
-                ) : (
-                  <label className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-5 cursor-pointer hover:border-purple-300 hover:bg-purple-50 transition">
-                    {uploading ? <><div className="text-2xl animate-spin">⚙️</div><span className="text-sm font-bold text-purple-600">Uploading…</span></>
-                      : <><span className="text-3xl">🎤</span><span className="text-sm font-bold text-slate-600">Click to upload audio</span><span className="text-xs text-slate-400">MP3, WAV, M4A</span></>}
-                    <input type="file" className="hidden" accept="audio/*" disabled={uploading}
-                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f, "course-files", "audio_url"); }} />
-                  </label>
-                )}
-                <input className={`${inputCls} mt-2`} value={form.audio_url ?? ""} onChange={e => set("audio_url", e.target.value)} placeholder="Or paste an audio URL (mp3, wav)" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">Notes / Transcript <span className="text-slate-400">(optional)</span></label>
-                <textarea className={textareaCls} rows={4} value={form.content ?? ""} onChange={e => set("content", e.target.value)} placeholder="Transcript or notes to follow along..." />
-              </div>
-            </>
-          )}
-
-          {/* QUIZ */}
-          {step.type === "quiz" && (
-            <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 text-center space-y-2">
-              <div className="text-3xl">❓</div>
-              <p className="text-sm font-bold text-violet-800">Quiz questions are managed in the Lessons page.</p>
-              <p className="text-xs font-semibold text-violet-600">Go to Admin → Courses → Lessons → Edit Lesson to add quiz questions. This step will display them as a required checkpoint.</p>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5 text-left">Instructions <span className="text-slate-400">(optional)</span></label>
-                <textarea className={textareaCls} rows={2} value={form.content ?? ""} onChange={e => set("content", e.target.value)} placeholder="e.g. Answer these questions before moving on!" />
-              </div>
-            </div>
-          )}
-
-          {/* POLL */}
-          {step.type === "poll" && (
-            <>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">Poll Question *</label>
-                <input className={inputCls} value={form.content ?? ""} onChange={e => set("content", e.target.value)} placeholder="e.g. Which company do you think will grow the most?" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-2">Poll Options</label>
-                <div className="space-y-2">
-                  {pollOptions.map((opt, i) => (
-                    <div key={i} className="flex gap-2">
-                      <input className={inputCls} value={opt.label} onChange={e => setPollOptions(prev => prev.map((o, j) => j === i ? { ...o, label: e.target.value } : o))} placeholder={`Option ${i + 1}`} />
-                      {pollOptions.length > 2 && (
-                        <button onClick={() => setPollOptions(prev => prev.filter((_, j) => j !== i).map((o, j) => ({ ...o, order_index: j })))}
-                          className="rounded-xl border border-rose-200 bg-rose-50 px-3 text-rose-500 hover:bg-rose-100 transition text-sm font-bold">✕</button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <button onClick={() => setPollOptions(prev => [...prev, { label: "", order_index: prev.length }])}
-                  className="mt-2 rounded-xl border-2 border-dashed border-slate-200 w-full py-2 text-sm font-bold text-slate-500 hover:border-violet-300 hover:text-violet-600 transition">
-                  + Add Option
+            ))}
+          </div>
+          <div>
+            <label className={labelCls}>Correct Answer *</label>
+            <div className="flex gap-2">
+              {(["a","b","c","d"] as const).map((opt) => (
+                <button key={opt} onClick={() => set("correct", opt)}
+                  className={`flex-1 rounded-xl border-2 py-2 text-sm font-bold transition ${form.correct === opt ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500 hover:border-emerald-200"}`}>
+                  {opt.toUpperCase()}
                 </button>
-              </div>
-            </>
-          )}
-
-          {/* MATCHING */}
-          {step.type === "matching" && (
-            <>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">Instructions <span className="text-slate-400">(optional)</span></label>
-                <input className={inputCls} value={form.content ?? ""} onChange={e => set("content", e.target.value)} placeholder="e.g. Match each company to what they make!" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-2">Matching Pairs</label>
-                <div className="space-y-2">
-                  {matchingPairs.map((pair, i) => (
-                    <div key={i} className="flex gap-2 items-center">
-                      <input className={inputCls} value={pair.left_item} onChange={e => setMatchingPairs(prev => prev.map((p, j) => j === i ? { ...p, left_item: e.target.value } : p))} placeholder="Left side" />
-                      <span className="text-slate-400 font-bold shrink-0">↔</span>
-                      <input className={inputCls} value={pair.right_item} onChange={e => setMatchingPairs(prev => prev.map((p, j) => j === i ? { ...p, right_item: e.target.value } : p))} placeholder="Right side" />
-                      {matchingPairs.length > 2 && (
-                        <button onClick={() => setMatchingPairs(prev => prev.filter((_, j) => j !== i).map((p, j) => ({ ...p, order_index: j })))}
-                          className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-rose-500 hover:bg-rose-100 transition text-sm font-bold shrink-0">✕</button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <button onClick={() => setMatchingPairs(prev => [...prev, { left_item: "", right_item: "", order_index: prev.length }])}
-                  className="mt-2 rounded-xl border-2 border-dashed border-slate-200 w-full py-2 text-sm font-bold text-slate-500 hover:border-teal-300 hover:text-teal-600 transition">
-                  + Add Pair
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* CHECKLIST */}
-          {step.type === "checklist" && (
-            <>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">Instructions <span className="text-slate-400">(optional)</span></label>
-                <input className={inputCls} value={form.content ?? ""} onChange={e => set("content", e.target.value)} placeholder="e.g. Complete each step before moving on!" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-2">Checklist Items</label>
-                <div className="space-y-2">
-                  {checklistItems.map((item, i) => (
-                    <div key={i} className="flex gap-2">
-                      <input className={inputCls} value={item.label} onChange={e => setChecklistItems(prev => prev.map((it, j) => j === i ? { ...it, label: e.target.value } : it))} placeholder={`Step ${i + 1}...`} />
-                      {checklistItems.length > 1 && (
-                        <button onClick={() => setChecklistItems(prev => prev.filter((_, j) => j !== i).map((it, j) => ({ ...it, order_index: j })))}
-                          className="rounded-xl border border-rose-200 bg-rose-50 px-3 text-rose-500 hover:bg-rose-100 transition text-sm font-bold">✕</button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <button onClick={() => setChecklistItems(prev => [...prev, { label: "", order_index: prev.length }])}
-                  className="mt-2 rounded-xl border-2 border-dashed border-slate-200 w-full py-2 text-sm font-bold text-slate-500 hover:border-emerald-300 hover:text-emerald-600 transition">
-                  + Add Item
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* REFLECTION */}
-          {step.type === "reflection" && (
-            <>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">Reflection Prompt *</label>
-                <textarea className={textareaCls} rows={3} value={form.content ?? ""} onChange={e => set("content", e.target.value)} placeholder="e.g. What was the most surprising thing you learned in this lesson?" />
-              </div>
-              <div className="rounded-xl border border-pink-200 bg-pink-50 px-4 py-3">
-                <p className="text-xs font-bold text-pink-800">💬 Student responses are saved to their profile and can be shared to the Community feed.</p>
-              </div>
-            </>
-          )}
-
-          {/* INTERACTIVE (Community Post) */}
-          {step.type === "interactive" && (
-            <>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">Prompt / Instructions</label>
-                <textarea className={textareaCls} rows={3} value={form.content ?? ""} onChange={e => set("content", e.target.value)} placeholder="e.g. Share what you made with the community!" />
-              </div>
-              <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
-                <p className="text-xs font-bold text-orange-800">🎮 This step shows the community post form. Students can share a reflection, showcase, or discovery to the community feed.</p>
-              </div>
-            </>
-          )}
-
-          {/* JOURNAL */}
-          {step.type === "journal" && (
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">Prompt Text *</label>
-                <textarea className={textareaCls} rows={3} value={form.content ?? ""}
-                  onChange={e => set("content", e.target.value)}
-                  placeholder="e.g. Before we dive in — what do you already know about this topic? What are you curious about?" />
-              </div>
-              <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3">
-                <p className="text-xs font-bold text-yellow-800">✏️ Private warm-up prompt. Students type their response but it is <span className="underline">not</span> saved to their profile or posted anywhere — it's just to get them thinking.</p>
-              </div>
+              ))}
             </div>
-          )}
-
-          {step.type === "portfolio" && (
-            <>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">Prompt / Instructions</label>
-                <textarea className={textareaCls} rows={3} value={form.content ?? ""} onChange={e => set("content", e.target.value)} placeholder="e.g. Pick a company you believe in and add it to your portfolio!" />
-              </div>
-              <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3">
-                <p className="text-xs font-bold text-green-800">📈 This step shows the portfolio add form. Students pick a company, record today's price, and track it over time.</p>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50">
-          <button onClick={onCancel} className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 transition">Cancel</button>
-          <button onClick={handleSave} disabled={busy} className="rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-violet-700 disabled:opacity-60 transition">
-            {busy ? "Saving..." : "Save Step ✓"}
-          </button>
+          </div>
+          <div>
+            <label className={labelCls}>Explanation (shown after answering)</label>
+            <input className={inputCls} value={form.explanation} onChange={(e) => set("explanation", e.target.value)} placeholder="e.g. Water boils at 100°C at sea level." />
+          </div>
+          <div className="flex gap-3">
+            <button onClick={save} disabled={busy}
+              className="rounded-xl bg-violet-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-violet-700 disabled:opacity-50 transition">
+              {busy ? "Saving…" : editing ? "Update Question" : "Add Question"}
+            </button>
+            {editing && (
+              <button onClick={() => { setEditing(null); setForm({ ...BLANK_QUIZ, lesson_id: lessonId }); }}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50">
+                Cancel
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Main Admin Steps Page ─────────────────────────────────────
-export default function AdminLessonStepsPage() {
+// ── FILE UPLOADER ──────────────────────────────────────────────────────────
+function FileUploader({ lessonId, onClose }: { lessonId: string; onClose: () => void }) {
+  const supabase = supabaseBrowser();
+  const [files, setFiles] = useState<LessonFile[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { loadFiles(); }, [lessonId]);
+
+  async function loadFiles() {
+    const { data } = await supabase.from("lesson_files").select("*").eq("lesson_id", lessonId);
+    setFiles((data as LessonFile[]) ?? []);
+  }
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const ext = file.name.split(".").pop();
+    const path = `${lessonId}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("course-files").upload(path, file);
+    if (error) { alert("Upload failed: " + error.message); setUploading(false); return; }
+    const { data: { publicUrl } } = supabase.storage.from("course-files").getPublicUrl(path);
+    await supabase.from("lesson_files").insert({ lesson_id: lessonId, name: file.name, url: publicUrl, file_type: ext, size_bytes: file.size });
+    await loadFiles();
+    setUploading(false);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  async function del(id: string) {
+    await supabase.from("lesson_files").delete().eq("id", id);
+    setFiles((f) => f.filter((x) => x.id !== id));
+  }
+
+  function formatSize(bytes: number) {
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-black/40 backdrop-blur-sm overflow-y-auto">
+      <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl my-8">
+        <div className="flex items-center justify-between p-6 border-b border-slate-100">
+          <h2 className="font-display text-xl font-bold text-slate-900">📎 Files & Worksheets</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
+        </div>
+        <div className="p-6 space-y-4">
+          <label className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-8 cursor-pointer hover:border-violet-300 hover:bg-violet-50 transition">
+            <span className="text-4xl">📤</span>
+            <span className="text-sm font-bold text-slate-600">Click to upload a file (PDF, worksheet, etc.)</span>
+            <span className="text-xs font-semibold text-slate-400">Max 50MB</span>
+            <input ref={fileRef} type="file" className="hidden" onChange={handleUpload} accept=".pdf,.doc,.docx,.xlsx,.ppt,.pptx,.zip" />
+          </label>
+          {uploading && (
+            <div className="rounded-xl bg-violet-50 border border-violet-200 p-4">
+              <div className="text-sm font-bold text-violet-700 mb-2">Uploading…</div>
+              <div className="h-2 rounded-full bg-violet-200 overflow-hidden"><div className="h-full rounded-full bg-violet-500 animate-pulse w-1/2" /></div>
+            </div>
+          )}
+          {files.length > 0 && (
+            <div className="space-y-2">
+              {files.map((f) => (
+                <div key={f.id} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white p-3">
+                  <span className="text-2xl">{f.file_type === "pdf" ? "📄" : "📁"}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-slate-800 truncate">{f.name}</div>
+                    <div className="text-xs font-semibold text-slate-400">{formatSize(f.size_bytes)}</div>
+                  </div>
+                  <a href={f.url} target="_blank" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">View</a>
+                  <button onClick={() => del(f.id)} className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50">Delete</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {files.length === 0 && !uploading && (
+            <p className="text-center text-sm font-semibold text-slate-400">No files uploaded yet.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── PROJECT EDITOR ─────────────────────────────────────────────────────────
+function ProjectEditor({ courseId, onClose }: { courseId: string; onClose: () => void }) {
+  const supabase = supabaseBrowser();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [form, setForm] = useState<Omit<Project, "id">>({ ...BLANK_PROJECT, course_id: courseId });
+  const [editing, setEditing] = useState<Project | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { load(); }, [courseId]);
+
+  async function load() {
+    const { data } = await supabase.from("projects").select("*").eq("course_id", courseId).order("order_index");
+    setProjects((data as Project[]) ?? []);
+  }
+
+  function set(key: keyof Omit<Project, "id">, val: string | number) {
+    setForm((f) => ({ ...f, [key]: val }));
+  }
+
+  async function save() {
+    if (!form.title.trim()) return;
+    setBusy(true);
+    if (editing) {
+      await supabase.from("projects").update(form).eq("id", editing.id);
+    } else {
+      await supabase.from("projects").insert({ ...form, order_index: projects.length });
+    }
+    await load();
+    setForm({ ...BLANK_PROJECT, course_id: courseId });
+    setEditing(null);
+    setBusy(false);
+  }
+
+  async function del(id: string) {
+    await supabase.from("projects").delete().eq("id", id);
+    setProjects((p) => p.filter((x) => x.id !== id));
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-black/40 backdrop-blur-sm overflow-y-auto">
+      <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl my-8">
+        <div className="flex items-center justify-between p-6 border-b border-slate-100">
+          <h2 className="font-display text-xl font-bold text-slate-900">🏆 Projects</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
+        </div>
+        {projects.length > 0 && (
+          <div className="p-6 space-y-3 border-b border-slate-100">
+            {projects.map((p, i) => (
+              <div key={p.id} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <div className="font-bold text-sm text-slate-800">{i + 1}. {p.title}</div>
+                    {p.description && <div className="text-xs text-slate-500 mt-1">{p.description}</div>}
+                    <div className="text-xs font-bold text-amber-600 mt-1">⭐ {p.xp_reward} XP</div>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={() => { setEditing(p); setForm({ ...p }); }}
+                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100">Edit</button>
+                    <button onClick={() => del(p.id)}
+                      className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50">Delete</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="p-6 space-y-4">
+          <h3 className="font-bold text-slate-700">{editing ? "Edit Project" : "Add Project"}</h3>
+          <div>
+            <label className={labelCls}>Title *</label>
+            <input className={inputCls} value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Cook a meal for your family!" />
+          </div>
+          <div>
+            <label className={labelCls}>Description</label>
+            <input className={inputCls} value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Short summary of the project" />
+          </div>
+          <div>
+            <label className={labelCls}>Instructions (markdown supported)</label>
+            <textarea className={textareaCls} rows={5} value={form.instructions}
+              onChange={(e) => set("instructions", e.target.value)}
+              placeholder={"Step 1: Choose a recipe\nStep 2: Shop for ingredients\nStep 3: Cook and photograph your meal!"} />
+          </div>
+          <div>
+            <label className={labelCls}>XP Reward</label>
+            <input className={inputCls} type="number" min={0} value={form.xp_reward} onChange={(e) => set("xp_reward", Number(e.target.value))} />
+          </div>
+          <div className="flex gap-3">
+            <button onClick={save} disabled={busy}
+              className="rounded-xl bg-amber-500 px-6 py-2.5 text-sm font-bold text-white hover:bg-amber-600 disabled:opacity-50 transition">
+              {busy ? "Saving…" : editing ? "Update Project" : "Add Project"}
+            </button>
+            {editing && (
+              <button onClick={() => { setEditing(null); setForm({ ...BLANK_PROJECT, course_id: courseId }); }}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50">
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── LESSON FORM ────────────────────────────────────────────────────────────
+function LessonForm({
+  courseId, lesson, onSave, onCancel,
+}: {
+  courseId: string;
+  lesson?: Lesson;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  const supabase = supabaseBrowser();
+  const router = useRouter();
+  const [form, setForm] = useState<Omit<Lesson, "id">>(
+    lesson ? { ...lesson } : { ...BLANK_LESSON, course_id: courseId }
+  );
+  const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [showFiles, setShowFiles] = useState(false);
+  const videoRef = useRef<HTMLInputElement>(null);
+
+  function set(key: keyof Omit<Lesson, "id">, val: string | number | boolean) {
+    setForm((f) => ({ ...f, [key]: val }));
+  }
+
+  async function uploadVideo(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const ext = file.name.split(".").pop();
+    const path = `${courseId}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("course-videos").upload(path, file);
+    if (error) { alert("Video upload failed: " + error.message); setUploading(false); return; }
+    const { data: { publicUrl } } = supabase.storage.from("course-videos").getPublicUrl(path);
+    set("video_url", publicUrl);
+    setUploading(false);
+  }
+
+  async function save() {
+    if (!form.title.trim()) return;
+    setBusy(true);
+    if (lesson) {
+      await supabase.from("lessons").update(form).eq("id", lesson.id);
+    } else {
+      await supabase.from("lessons").insert(form);
+    }
+    onSave();
+    setBusy(false);
+  }
+
+  return (
+    <>
+      {showQuiz && lesson && <QuizEditor lessonId={lesson.id} onClose={() => setShowQuiz(false)} />}
+      {showFiles && lesson && <FileUploader lessonId={lesson.id} onClose={() => setShowFiles(false)} />}
+
+      <div className="rounded-2xl border-2 border-violet-200 bg-white p-6 shadow-sm space-y-5">
+        <h3 className="font-display text-lg font-bold text-slate-900">{lesson ? "Edit Lesson" : "New Lesson"}</h3>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-2">
+            <label className={labelCls}>Title *</label>
+            <input className={inputCls} value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Kitchen Safety Basics" />
+          </div>
+          <div className="col-span-2">
+            <label className={labelCls}>Description</label>
+            <input className={inputCls} value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Short lesson summary" />
+          </div>
+        </div>
+
+        {/* Video */}
+        <div>
+          <label className={labelCls}>Video</label>
+          {form.video_url ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 flex items-center gap-3">
+              <span className="text-2xl">🎬</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold text-emerald-700 truncate">Video uploaded ✓</div>
+                <div className="text-xs text-emerald-600 truncate">{form.video_url}</div>
+              </div>
+              <button onClick={() => set("video_url", "")} className="text-xs font-bold text-rose-500 hover:text-rose-700">Remove</button>
+            </div>
+          ) : (
+            <label className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-6 cursor-pointer hover:border-violet-300 hover:bg-violet-50 transition">
+              {uploading ? (
+                <><div className="text-3xl animate-spin">⚙️</div><span className="text-sm font-bold text-violet-600">Uploading video…</span></>
+              ) : (
+                <><span className="text-3xl">🎬</span><span className="text-sm font-bold text-slate-600">Click to upload video</span><span className="text-xs text-slate-400">MP4, MOV, WebM</span></>
+              )}
+              <input ref={videoRef} type="file" className="hidden" accept="video/*" onChange={uploadVideo} disabled={uploading} />
+            </label>
+          )}
+          <div className="mt-2">
+            <input className={inputCls} value={form.video_url} onChange={(e) => set("video_url", e.target.value)}
+              placeholder="Or paste a video URL (YouTube embed, Vimeo, etc.)" />
+          </div>
+        </div>
+
+        {/* Written content */}
+        <div>
+          <label className={labelCls}>Written Content / Instructions (markdown supported)</label>
+          <textarea className={textareaCls} rows={6} value={form.content}
+            onChange={(e) => set("content", e.target.value)}
+            placeholder={"## What you'll need\n- A cutting board\n- A knife\n- An adult helper\n\n## Instructions\n1. Wash your hands first...\n\nUse [[PORTFOLIO_PROMPT]] to embed a portfolio activity block."} />
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className={labelCls}>XP Reward</label>
+            <input className={inputCls} type="number" min={0} value={form.xp_reward} onChange={(e) => set("xp_reward", Number(e.target.value))} />
+          </div>
+          <div>
+            <label className={labelCls}>Order</label>
+            <input className={inputCls} type="number" min={0} value={form.order_index} onChange={(e) => set("order_index", Number(e.target.value))} />
+          </div>
+          <div>
+            <label className={labelCls}>Quiz Questions to Show</label>
+            <input className={inputCls} type="number" min={0} value={form.quiz_question_count ?? 5} onChange={(e) => set("quiz_question_count", Number(e.target.value))} />
+          </div>
+        </div>
+
+        <div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.is_published} onChange={(e) => set("is_published", e.target.checked)}
+              className="h-4 w-4 rounded accent-violet-600" />
+            <span className="text-sm font-semibold text-slate-700">Published (visible to kids)</span>
+          </label>
+        </div>
+
+        {/* Action buttons — only for existing lessons */}
+        {lesson && (
+          <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+            <button onClick={() => setShowQuiz(true)}
+              className="rounded-xl border-2 border-violet-200 bg-violet-50 px-4 py-2 text-sm font-bold text-violet-700 hover:bg-violet-100 transition">
+              ⚡ Edit Quiz Questions
+            </button>
+            <button onClick={() => setShowFiles(true)}
+              className="rounded-xl border-2 border-sky-200 bg-sky-50 px-4 py-2 text-sm font-bold text-sky-700 hover:bg-sky-100 transition">
+              📎 Manage Files
+            </button>
+            <button onClick={() => router.push(`/admin/courses/${lesson.course_id}/lessons/${lesson.id}/steps`)}
+              className="rounded-xl border-2 border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 transition">
+              🪜 Manage Steps →
+            </button>
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button onClick={save} disabled={busy || uploading}
+            className="rounded-xl bg-violet-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-violet-700 disabled:opacity-50 transition">
+            {busy ? "Saving…" : lesson ? "Save Changes" : "Add Lesson"}
+          </button>
+          <button onClick={onCancel}
+            className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50 transition">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── MAIN PAGE ──────────────────────────────────────────────────────────────
+export default function AdminLessonsPage() {
   const params   = useParams();
   const router   = useRouter();
   const supabase = supabaseBrowser();
   const courseId = params.courseId as string;
-  const lessonId = params.lessonId as string;
 
-  const [lesson, setLesson]   = useState<Lesson | null>(null);
   const [course, setCourse]   = useState<Course | null>(null);
-  const [steps, setSteps]     = useState<Step[]>([]);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showTypeMenu, setShowTypeMenu] = useState(false);
-  const [editingStep, setEditingStep]   = useState<(Partial<Step> & { type: StepType }) | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [adding, setAdding]   = useState(false);
+  const [editing, setEditing] = useState<Lesson | null>(null);
+  const [showProject, setShowProject] = useState(false);
 
-  useEffect(() => { loadData(); }, [lessonId]);
+  useEffect(() => { if (courseId) loadData(); }, [courseId]);
 
   async function loadData() {
     setLoading(true);
-    const [{ data: lessonData }, { data: courseData }, { data: stepsData }] = await Promise.all([
-      supabase.from("lessons").select("id, title, order_index").eq("id", lessonId).maybeSingle(),
-      supabase.from("courses").select("id, title").eq("id", courseId).maybeSingle(),
-      supabase.from("lesson_steps").select("*").eq("lesson_id", lessonId).order("order_index"),
+    const [{ data: courseData }, { data: lessonData }] = await Promise.all([
+      supabase.from("courses").select("id, title, emoji").eq("id", courseId).maybeSingle(),
+      supabase.from("lessons").select("*").eq("course_id", courseId).order("order_index"),
     ]);
-    setLesson(lessonData as Lesson);
     setCourse(courseData as Course);
-    setSteps((stepsData as Step[]) ?? []);
+    setLessons((lessonData as Lesson[]) ?? []);
     setLoading(false);
   }
 
-  async function saveStep(form: Partial<Step>, extras: { pollOptions?: PollOption[]; checklistItems?: ChecklistItem[]; matchingPairs?: MatchingPair[] }) {
-    const isEdit = !!form.id;
-
-    if (isEdit) {
-      await supabase.from("lesson_steps").update({
-        title: form.title, content: form.content, video_url: form.video_url,
-        pdf_url: form.pdf_url, image_url: form.image_url, audio_url: form.audio_url,
-        image_caption: form.image_caption,
-      }).eq("id", form.id!);
-    } else {
-      const newIndex = steps.length;
-      const { data: newStep } = await supabase.from("lesson_steps").insert({
-        lesson_id: lessonId, order_index: newIndex, type: form.type,
-        title: form.title, content: form.content, video_url: form.video_url,
-        pdf_url: form.pdf_url, image_url: form.image_url, audio_url: form.audio_url,
-        image_caption: form.image_caption,
-      }).select().maybeSingle();
-
-      if (newStep) {
-        if (form.type === "poll" && extras.pollOptions?.length) {
-          await supabase.from("lesson_step_poll_options").insert(
-            extras.pollOptions.map(o => ({ step_id: newStep.id, label: o.label, order_index: o.order_index }))
-          );
-        }
-        if (form.type === "checklist" && extras.checklistItems?.length) {
-          await supabase.from("lesson_step_checklist_items").insert(
-            extras.checklistItems.map(it => ({ step_id: newStep.id, label: it.label, order_index: it.order_index }))
-          );
-        }
-        if (form.type === "matching" && extras.matchingPairs?.length) {
-          await supabase.from("lesson_step_matching_pairs").insert(
-            extras.matchingPairs.map(p => ({ step_id: newStep.id, left_item: p.left_item, right_item: p.right_item, order_index: p.order_index }))
-          );
-        }
-      }
-    }
-
-    await loadData();
-    setEditingStep(null);
+  async function deleteLesson(id: string) {
+    if (!confirm("Delete this lesson? This will also delete its quiz questions and files.")) return;
+    await supabase.from("lessons").delete().eq("id", id);
+    setLessons((l) => l.filter((x) => x.id !== id));
   }
 
-  async function deleteStep(id: string) {
-    if (!confirm("Delete this step?")) return;
-    await supabase.from("lesson_steps").delete().eq("id", id);
-    // Renumber remaining steps sequentially to avoid order_index conflicts
-    const remaining = steps.filter(s => s.id !== id);
-    for (let i = 0; i < remaining.length; i++) {
-      if (remaining[i].order_index !== i) {
-        await supabase.from("lesson_steps").update({ order_index: i }).eq("id", remaining[i].id);
-      }
-    }
-    setSteps(remaining.map((s, i) => ({ ...s, order_index: i })));
-  }
-
-  async function moveStep(id: string, dir: "up" | "down") {
-    const idx = steps.findIndex(s => s.id === id);
-    if (dir === "up" && idx === 0) return;
-    if (dir === "down" && idx === steps.length - 1) return;
-    setBusy(id);
-    const swapIdx = dir === "up" ? idx - 1 : idx + 1;
-    // Build new order optimistically
-    const newSteps = [...steps];
-    const temp = newSteps[idx];
-    newSteps[idx] = newSteps[swapIdx];
-    newSteps[swapIdx] = temp;
-    // Renumber sequentially
-    const renumbered = newSteps.map((s, i) => ({ ...s, order_index: i }));
-    setSteps(renumbered);
-    // Save to DB
-    const results = await Promise.all(
-      renumbered.map(s => supabase.from("lesson_steps").update({ order_index: s.order_index }).eq("id", s.id))
-    );
-    const errors = results.filter(r => r.error);
-    if (errors.length > 0) alert("Save error: " + errors[0].error?.message);
-    setBusy(null);
-  }
-
-  if (loading) return <div className="flex justify-center py-20"><div className="text-4xl animate-bounce">📝</div></div>;
+  if (loading) return (
+    <div className="flex items-center justify-center py-20">
+      <div className="text-4xl animate-bounce">📚</div>
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm font-semibold text-slate-500">
-        <button onClick={() => router.push("/admin/courses")} className="hover:text-slate-800 transition">Courses</button>
-        <span>›</span>
-        <button onClick={() => router.push(`/admin/courses/${courseId}/lessons`)} className="hover:text-slate-800 transition">{course?.title}</button>
-        <span>›</span>
-        <span className="text-slate-800">{lesson?.title}</span>
-      </div>
+    <>
+      {showProject && <ProjectEditor courseId={courseId} onClose={() => setShowProject(false)} />}
 
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="font-display text-3xl font-black text-slate-900">📝 Lesson Steps</h1>
-          <p className="text-sm font-semibold text-slate-500 mt-1">Build the pages students click through in this lesson</p>
-        </div>
-        <div className="relative">
-          <button onClick={() => setShowTypeMenu(!showTypeMenu)}
-            className="rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-violet-700 transition shadow-sm">
-            ➕ Add Step
+      <div className="space-y-6 max-w-3xl">
+        {/* Header */}
+        <div className="flex items-center gap-4">
+          <button onClick={() => router.push("/admin/courses")}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 transition">
+            ← Back
           </button>
-          {showTypeMenu && (
-            <div className="absolute right-0 top-12 z-20 w-72 rounded-2xl border border-slate-100 bg-white shadow-xl p-3">
-              <p className="text-xs font-bold text-slate-400 mb-2 px-1">Choose a step type</p>
-              <div className="grid grid-cols-2 gap-1.5">
-                {STEP_TYPES.map(({ type, icon, label, color }) => (
-                  <button key={type} onClick={() => { setEditingStep({ type, lesson_id: lessonId }); setShowTypeMenu(false); }}
-                    className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-bold transition hover:scale-105 ${color}`}>
-                    <span className="text-base">{icon}</span>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          <div>
+            <h1 className="font-display text-2xl font-black text-slate-900">
+              {course?.emoji} {course?.title}
+            </h1>
+            <p className="text-sm font-semibold text-slate-500 mt-0.5">{lessons.length} lesson{lessons.length !== 1 ? "s" : ""}</p>
+          </div>
+          <div className="ml-auto flex gap-2">
+            <button onClick={() => setShowProject(true)}
+              className="rounded-xl border-2 border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700 hover:bg-amber-100 transition">
+              🏆 Manage Projects
+            </button>
+            <button onClick={() => { setAdding(true); setEditing(null); }}
+              className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white hover:bg-violet-700 transition">
+              + Add Lesson
+            </button>
+          </div>
         </div>
+
+        {/* Add form */}
+        {adding && (
+          <LessonForm
+            courseId={courseId}
+            onSave={async () => { setAdding(false); await loadData(); }}
+            onCancel={() => setAdding(false)}
+          />
+        )}
+
+        {/* Lesson list */}
+        {lessons.length === 0 && !adding ? (
+          <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white p-16 text-center">
+            <div className="text-5xl mb-4">📭</div>
+            <p className="font-display text-lg font-bold text-slate-400">No lessons yet</p>
+            <p className="text-sm font-semibold text-slate-400 mt-1">Click "Add Lesson" to get started!</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {lessons.map((lesson, i) => (
+              <div key={lesson.id}>
+                {editing?.id === lesson.id ? (
+                  <LessonForm
+                    courseId={courseId}
+                    lesson={lesson}
+                    onSave={async () => { setEditing(null); await loadData(); }}
+                    onCancel={() => setEditing(null)}
+                  />
+                ) : (
+                  <div className="flex items-center gap-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm hover:shadow-md transition">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm font-black text-violet-700">
+                      {i + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-slate-900">{lesson.title}</div>
+                      <div className="flex items-center gap-3 mt-1 flex-wrap">
+                        {lesson.video_url && <span className="text-xs font-semibold text-emerald-600">🎬 Video</span>}
+                        {lesson.content && <span className="text-xs font-semibold text-sky-600">📝 Content</span>}
+                        <span className="text-xs font-semibold text-amber-600">⭐ {lesson.xp_reward} XP</span>
+                        {(lesson.quiz_question_count ?? 0) > 0 && (
+                          <span className="text-xs font-semibold text-violet-600">⚡ {lesson.quiz_question_count}Q quiz</span>
+                        )}
+                        <span className={`text-xs font-bold rounded-full px-2 py-0.5 ${lesson.is_published ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                          {lesson.is_published ? "Published" : "Draft"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button onClick={() => router.push(`/admin/courses/${courseId}/lessons/${lesson.id}/steps`)}
+                        className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition">
+                        Steps →
+                      </button>
+                      <button onClick={() => { setEditing(lesson); setAdding(false); }}
+                        className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition">
+                        Edit
+                      </button>
+                      <button onClick={() => deleteLesson(lesson.id)}
+                        className="rounded-xl border border-rose-200 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 transition">
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-
-      {/* Steps list */}
-      {steps.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white p-16 text-center">
-          <div className="text-5xl mb-4">📄</div>
-          <p className="font-bold text-slate-400 text-lg">No steps yet</p>
-          <p className="text-sm font-semibold text-slate-400 mt-1">Click ➕ Add Step to build your first lesson page</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {steps.map((step, i) => {
-            const cfg = STEP_TYPES.find(t => t.type === step.type)!;
-            return (
-              <div key={step.id} className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm hover:shadow-md transition">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 font-black text-slate-600 text-sm">
-                  {i + 1}
-                </div>
-                <div className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold shrink-0 ${cfg.color}`}>
-                  {cfg.icon} {cfg.label}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-bold text-slate-800 truncate">{step.title || `${cfg.label} step`}</div>
-                  {step.content && <div className="text-xs font-semibold text-slate-400 truncate mt-0.5">{step.content.slice(0, 80)}...</div>}
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button onClick={() => moveStep(step.id, "up")} disabled={i === 0 || busy === step.id}
-                    className="rounded-lg border border-slate-200 p-2 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-30 transition">↑</button>
-                  <button onClick={() => moveStep(step.id, "down")} disabled={i === steps.length - 1 || busy === step.id}
-                    className="rounded-lg border border-slate-200 p-2 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-30 transition">↓</button>
-                  <button onClick={() => setEditingStep({ ...step })}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition">Edit</button>
-                  <button onClick={() => deleteStep(step.id)}
-                    className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-100 transition">Delete</button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {steps.length > 0 && (
-        <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 flex items-center gap-3">
-          <span className="text-xl">👁️</span>
-          <p className="text-sm font-semibold text-slate-500">Students will click through these {steps.length} step{steps.length !== 1 ? "s" : ""} one at a time. Use ↑↓ to reorder them.</p>
-        </div>
-      )}
-
-      {editingStep && (
-        <StepForm
-          step={editingStep}
-          lessonId={lessonId}
-          onSave={saveStep}
-          onCancel={() => setEditingStep(null)}
-        />
-      )}
-    </div>
+    </>
   );
 }
