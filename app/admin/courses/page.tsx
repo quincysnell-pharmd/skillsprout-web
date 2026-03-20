@@ -164,7 +164,7 @@ export default function AdminCourses() {
           {
             key: "id", label: "Lessons",
             render: (r) => (
-              <button onClick={() => router.push(`/admin/courses/${r.id}/lessons`)}
+              <button onClick={() => window.location.href = `/admin/courses/${r.id}/lessons`}
                 className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700 hover:bg-violet-100 transition whitespace-nowrap">
                 Manage →
               </button>
