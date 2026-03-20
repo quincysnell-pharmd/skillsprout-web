@@ -10,14 +10,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const supabase = supabaseBrowser();
   const [checking, setChecking] = useState(true);
 
-  useEffect(() => { checkAdmin(); }, []);
+  useEffect(() => { checkAdmin(); }, [pathname]);
 
   async function checkAdmin() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { setChecking(false); router.replace("/auth"); return; }
-      const { data: adminRow } = await supabase.from("admins").select("id").eq("user_id", session.user.id).maybeSingle();
-      if (!adminRow) { setChecking(false); router.replace("/"); return; }
+      if (!session) {
+        // Try getUser as fallback
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { setChecking(false); router.replace("/auth"); return; }
+        const { data: adminRow } = await supabase.from("admins").select("id").eq("user_id", user.id).maybeSingle();
+        if (!adminRow) { setChecking(false); router.replace("/"); return; }
+      } else {
+        const { data: adminRow } = await supabase.from("admins").select("id").eq("user_id", session.user.id).maybeSingle();
+        if (!adminRow) { setChecking(false); router.replace("/"); return; }
+      }
       setChecking(false);
     } catch (err) {
       console.error("Admin auth check error:", err);
