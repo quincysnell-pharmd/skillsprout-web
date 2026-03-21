@@ -56,12 +56,27 @@ function StepForm({ step, onSave, onCancel, lessonId }: {
   const [form, setForm] = useState<Partial<Step>>({ ...step });
   const [pollOptions, setPollOptions]     = useState<PollOption[]>([{ label: "", order_index: 0 }, { label: "", order_index: 1 }]);
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([{ label: "", order_index: 0 }]);
-  const [matchingPairs, setMatchingPairs] = useState<MatchingPair[]>([{ left_item: "", right_item: "", order_index: 0 }]);
+  const [matchingPairs, setMatchingPairs] = useState<MatchingPair[]>([{ left_item: "", right_item: "", order_index: 0 }, { left_item: "", right_item: "", order_index: 1 }]);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   const cfg = STEP_TYPES.find(t => t.type === step.type)!;
   const supabase = supabaseBrowser();
+
+  useEffect(() => {
+    if (step.id && step.type === "matching") {
+      supabase.from("lesson_step_matching_pairs").select("*").eq("step_id", step.id).order("order_index")
+        .then(({ data }) => { if (data && data.length > 0) setMatchingPairs(data as MatchingPair[]); });
+    }
+    if (step.id && step.type === "poll") {
+      supabase.from("lesson_step_poll_options").select("*").eq("step_id", step.id).order("order_index")
+        .then(({ data }) => { if (data && data.length > 0) setPollOptions(data as PollOption[]); });
+    }
+    if (step.id && step.type === "checklist") {
+      supabase.from("lesson_step_checklist_items").select("*").eq("step_id", step.id).order("order_index")
+        .then(({ data }) => { if (data && data.length > 0) setChecklistItems(data as ChecklistItem[]); });
+    }
+  }, [step.id]);
 
   async function uploadFile(file: File, bucket: string, field: keyof Step) {
     setUploading(true);
@@ -436,6 +451,28 @@ export default function AdminLessonStepsPage() {
         pdf_url: form.pdf_url, image_url: form.image_url, audio_url: form.audio_url,
         image_caption: form.image_caption,
       }).eq("id", form.id!);
+      // Update extras for matching/poll/checklist
+      if (form.type === "matching" && extras.matchingPairs?.length) {
+        await supabase.from("lesson_step_matching_pairs").delete().eq("step_id", form.id!);
+        await supabase.from("lesson_step_matching_pairs").insert(
+          extras.matchingPairs.filter(p => p.left_item.trim() && p.right_item.trim())
+            .map((p, i) => ({ step_id: form.id!, left_item: p.left_item, right_item: p.right_item, order_index: i }))
+        );
+      }
+      if (form.type === "poll" && extras.pollOptions?.length) {
+        await supabase.from("lesson_step_poll_options").delete().eq("step_id", form.id!);
+        await supabase.from("lesson_step_poll_options").insert(
+          extras.pollOptions.filter(o => o.label.trim())
+            .map((o, i) => ({ step_id: form.id!, label: o.label, order_index: i }))
+        );
+      }
+      if (form.type === "checklist" && extras.checklistItems?.length) {
+        await supabase.from("lesson_step_checklist_items").delete().eq("step_id", form.id!);
+        await supabase.from("lesson_step_checklist_items").insert(
+          extras.checklistItems.filter(it => it.label.trim())
+            .map((it, i) => ({ step_id: form.id!, label: it.label, order_index: i }))
+        );
+      }
     } else {
       const newIndex = steps.length;
       const { data: newStep } = await supabase.from("lesson_steps").insert({
