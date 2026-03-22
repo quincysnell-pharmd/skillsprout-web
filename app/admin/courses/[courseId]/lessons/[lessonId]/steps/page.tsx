@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
 
 // ── Types ─────────────────────────────────────────────────────
-type StepType = "text"|"video"|"pdf"|"image"|"audio"|"quiz"|"poll"|"matching"|"checklist"|"reflection"|"interactive"|"portfolio"|"journal";
+type StepType = "text"|"video"|"pdf"|"image"|"audio"|"quiz"|"poll"|"matching"|"checklist"|"reflection"|"interactive"|"portfolio"|"journal"|"table";
 
 interface Step {
   id: string;
@@ -41,9 +41,113 @@ const STEP_TYPES: { type: StepType; icon: string; label: string; color: string }
   // Community Post removed — sharing now happens via Reflection step
   { type: "portfolio",   icon: "📈", label: "Portfolio",      color: "bg-green-50 border-green-200 text-green-700"    },
   { type: "journal",     icon: "✏️", label: "Journal Prompt", color: "bg-yellow-50 border-yellow-200 text-yellow-700"  },
+  { type: "table",       icon: "📋", label: "Table",           color: "bg-emerald-50 border-emerald-200 text-emerald-700" },
 ];
 
 const inputCls = "w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100 transition";
+
+// ── Table Step Editor ─────────────────────────────────────────
+function TableStepEditor({ value, onChange }: { value: string; onChange: (val: string) => void }) {
+  const parseData = () => {
+    try { return JSON.parse(value) as { headers: string[]; rows: string[][] }; }
+    catch { return { headers: ["Column 1", "Column 2"], rows: [["", ""], ["", ""]] }; }
+  };
+
+  const [data, setData] = useState(parseData);
+
+  function update(newData: { headers: string[]; rows: string[][] }) {
+    setData(newData);
+    onChange(JSON.stringify(newData));
+  }
+
+  function setHeader(i: number, val: string) {
+    const headers = [...data.headers];
+    headers[i] = val;
+    update({ ...data, headers });
+  }
+
+  function setCell(ri: number, ci: number, val: string) {
+    const rows = data.rows.map(r => [...r]);
+    rows[ri][ci] = val;
+    update({ ...data, rows });
+  }
+
+  function addColumn() {
+    update({
+      headers: [...data.headers, `Column ${data.headers.length + 1}`],
+      rows: data.rows.map(r => [...r, ""]),
+    });
+  }
+
+  function addRow() {
+    update({ ...data, rows: [...data.rows, Array(data.headers.length).fill("")] });
+  }
+
+  function removeColumn(ci: number) {
+    if (data.headers.length <= 1) return;
+    update({
+      headers: data.headers.filter((_, i) => i !== ci),
+      rows: data.rows.map(r => r.filter((_, i) => i !== ci)),
+    });
+  }
+
+  function removeRow(ri: number) {
+    if (data.rows.length <= 1) return;
+    update({ ...data, rows: data.rows.filter((_, i) => i !== ri) });
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">📋 Table Builder</p>
+      <div className="overflow-x-auto rounded-2xl border-2 border-emerald-200 bg-emerald-50">
+        <table className="min-w-full">
+          <thead>
+            <tr className="bg-emerald-100">
+              {data.headers.map((h, ci) => (
+                <th key={ci} className="p-2">
+                  <div className="flex items-center gap-1">
+                    <input value={h} onChange={e => setHeader(ci, e.target.value)}
+                      className="w-full rounded-lg border border-emerald-300 bg-white px-2 py-1 text-xs font-bold text-emerald-800 outline-none focus:border-emerald-500" />
+                    {data.headers.length > 1 && (
+                      <button onClick={() => removeColumn(ci)} className="text-rose-400 hover:text-rose-600 font-bold text-xs shrink-0">✕</button>
+                    )}
+                  </div>
+                </th>
+              ))}
+              <th className="p-2 w-8"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.map((row, ri) => (
+              <tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-emerald-50/50"}>
+                {row.map((cell, ci) => (
+                  <td key={ci} className="p-2">
+                    <input value={cell} onChange={e => setCell(ri, ci, e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:border-emerald-400" />
+                  </td>
+                ))}
+                <td className="p-2">
+                  {data.rows.length > 1 && (
+                    <button onClick={() => removeRow(ri)} className="text-rose-400 hover:text-rose-600 font-bold text-xs">✕</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={addRow} className="rounded-xl border-2 border-dashed border-emerald-300 px-4 py-2 text-xs font-bold text-emerald-600 hover:bg-emerald-50 transition">
+          + Add Row
+        </button>
+        <button onClick={addColumn} className="rounded-xl border-2 border-dashed border-emerald-300 px-4 py-2 text-xs font-bold text-emerald-600 hover:bg-emerald-50 transition">
+          + Add Column
+        </button>
+      </div>
+      <p className="text-xs font-semibold text-slate-400">First row is the header. Click ✕ to remove rows/columns.</p>
+    </div>
+  );
+}
 const textareaCls = inputCls + " resize-none";
 
 // ── Step Form ─────────────────────────────────────────────────
@@ -376,6 +480,14 @@ function StepForm({ step, onSave, onCancel, lessonId }: {
                 <p className="text-xs font-bold text-orange-800">🎮 This step shows the community post form. Students can share a reflection, showcase, or discovery to the community feed.</p>
               </div>
             </>
+          )}
+
+          {/* TABLE */}
+          {step.type === "table" && (
+            <TableStepEditor
+              value={form.content ?? ""}
+              onChange={val => set("content", val)}
+            />
           )}
 
           {/* JOURNAL */}
