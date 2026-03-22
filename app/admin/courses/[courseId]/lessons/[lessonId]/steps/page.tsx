@@ -38,7 +38,7 @@ const STEP_TYPES: { type: StepType; icon: string; label: string; color: string }
   { type: "matching",    icon: "🔢", label: "Matching",       color: "bg-teal-50 border-teal-200 text-teal-700"       },
   { type: "checklist",   icon: "✅", label: "Checklist",      color: "bg-emerald-50 border-emerald-200 text-emerald-700" },
   { type: "reflection",  icon: "💬", label: "Reflection",     color: "bg-pink-50 border-pink-200 text-pink-700"       },
-  // Community Post removed — sharing now happens via Reflection step
+  { type: "interactive", icon: "🎮", label: "Community Post", color: "bg-orange-50 border-orange-200 text-orange-700" }, // kept for backward compat but hidden from picker
   { type: "portfolio",   icon: "📈", label: "Portfolio",      color: "bg-green-50 border-green-200 text-green-700"    },
   { type: "journal",     icon: "✏️", label: "Journal Prompt", color: "bg-yellow-50 border-yellow-200 text-yellow-700"  },
   { type: "table",       icon: "📋", label: "Table",           color: "bg-emerald-50 border-emerald-200 text-emerald-700" },
@@ -724,7 +724,7 @@ export default function AdminLessonStepsPage() {
             <div className="absolute right-0 top-12 z-20 w-72 rounded-2xl border border-slate-100 bg-white shadow-xl p-3">
               <p className="text-xs font-bold text-slate-400 mb-2 px-1">Choose a step type</p>
               <div className="grid grid-cols-2 gap-1.5">
-                {STEP_TYPES.map(({ type, icon, label, color }) => (
+                {STEP_TYPES.filter(t => t.type !== "interactive").map(({ type, icon, label, color }) => (
                   <button key={type} onClick={() => { setEditingStep({ type, lesson_id: lessonId }); setShowTypeMenu(false); }}
                     className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-bold transition hover:scale-105 ${color}`}>
                     <span className="text-base">{icon}</span>
@@ -747,7 +747,7 @@ export default function AdminLessonStepsPage() {
       ) : (
         <div className="space-y-3">
           {steps.map((step, i) => {
-            const cfg = STEP_TYPES.find(t => t.type === step.type)!;
+            const cfg = STEP_TYPES.find(t => t.type === step.type) ?? { icon: "🎮", label: step.type, color: "bg-orange-50 border-orange-200 text-orange-700" };
             return (
               <div key={step.id} className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm hover:shadow-md transition">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 font-black text-slate-600 text-sm">
