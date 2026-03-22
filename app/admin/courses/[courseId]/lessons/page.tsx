@@ -654,33 +654,43 @@ function StepContent({ step, childId, courseId, lessonId, onComplete, isComplete
 
       {/* TABLE */}
       {step.type === "table" && step.content && (
-        <div className="overflow-x-auto rounded-2xl border border-emerald-100 shadow-sm">
+        <div className="space-y-3">
           {(() => {
             try {
-              const tableData = JSON.parse(step.content) as { headers: string[]; rows: string[][] };
+              const tableData = JSON.parse(step.content) as { headers: string[]; rows: string[][]; before?: string; after?: string };
               return (
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="bg-gradient-to-r from-emerald-500 to-teal-500">
-                      {tableData.headers.map((h, i) => (
-                        <th key={i} className="px-5 py-3 text-left text-xs font-black text-white uppercase tracking-wide">
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tableData.rows.map((row, ri) => (
-                      <tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-emerald-50/50"}>
-                        {row.map((cell, ci) => (
-                          <td key={ci} className={`px-5 py-3 text-sm font-semibold border-b border-slate-100 ${ci === 0 ? "text-emerald-800 font-bold" : "text-slate-700"}`}>
-                            {cell}
-                          </td>
+                <>
+                  {tableData.before && (
+                    <p className="text-sm font-semibold text-slate-700 leading-relaxed">{tableData.before}</p>
+                  )}
+                  <div className="overflow-x-auto rounded-2xl border border-emerald-100 shadow-sm">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="bg-gradient-to-r from-emerald-500 to-teal-500">
+                          {tableData.headers.map((h, i) => (
+                            <th key={i} className="px-5 py-3 text-left text-xs font-black text-white uppercase tracking-wide">
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tableData.rows.map((row, ri) => (
+                          <tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-emerald-50/50"}>
+                            {row.map((cell, ci) => (
+                              <td key={ci} className={`px-5 py-3 text-sm font-semibold border-b border-slate-100 ${ci === 0 ? "text-emerald-800 font-bold" : "text-slate-700"}`}>
+                                {cell}
+                              </td>
+                            ))}
+                          </tr>
                         ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                      </tbody>
+                    </table>
+                  </div>
+                  {tableData.after && (
+                    <p className="text-sm font-semibold text-slate-700 leading-relaxed">{tableData.after}</p>
+                  )}
+                </>
               );
             } catch {
               return <p className="p-4 text-sm text-slate-400">Table data could not be loaded.</p>;

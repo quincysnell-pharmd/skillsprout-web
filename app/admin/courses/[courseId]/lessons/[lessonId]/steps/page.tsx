@@ -49,13 +49,16 @@ const inputCls = "w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5
 // ── Table Step Editor ─────────────────────────────────────────
 function TableStepEditor({ value, onChange }: { value: string; onChange: (val: string) => void }) {
   const parseData = () => {
-    try { return JSON.parse(value) as { headers: string[]; rows: string[][] }; }
-    catch { return { headers: ["Column 1", "Column 2"], rows: [["", ""], ["", ""]] }; }
+    try {
+      const parsed = JSON.parse(value) as { headers: string[]; rows: string[][]; before?: string; after?: string };
+      return parsed;
+    }
+    catch { return { headers: ["Column 1", "Column 2"], rows: [["", ""], ["", ""]], before: "", after: "" }; }
   };
 
   const [data, setData] = useState(parseData);
 
-  function update(newData: { headers: string[]; rows: string[][] }) {
+  function update(newData: { headers: string[]; rows: string[][]; before?: string; after?: string }) {
     setData(newData);
     onChange(JSON.stringify(newData));
   }
@@ -145,6 +148,18 @@ function TableStepEditor({ value, onChange }: { value: string; onChange: (val: s
         </button>
       </div>
       <p className="text-xs font-semibold text-slate-400">First row is the header. Click ✕ to remove rows/columns.</p>
+      <div>
+        <label className="block text-xs font-bold text-slate-600 mb-1.5">Text before table <span className="text-slate-400">(optional)</span></label>
+        <textarea value={data.before ?? ""} onChange={e => update({ ...data, before: e.target.value })}
+          rows={2} placeholder="e.g. Here is a summary of the three main ways to use money:"
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-emerald-400 resize-none" />
+      </div>
+      <div>
+        <label className="block text-xs font-bold text-slate-600 mb-1.5">Text after table <span className="text-slate-400">(optional)</span></label>
+        <textarea value={data.after ?? ""} onChange={e => update({ ...data, after: e.target.value })}
+          rows={2} placeholder="e.g. Which of these do you do most often?"
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-emerald-400 resize-none" />
+      </div>
     </div>
   );
 }
