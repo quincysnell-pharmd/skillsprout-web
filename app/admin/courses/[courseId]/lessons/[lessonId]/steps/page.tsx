@@ -54,9 +54,18 @@ function StepForm({ step, onSave, onCancel, lessonId }: {
   lessonId: string;
 }) {
   const [form, setForm] = useState<Partial<Step>>({ ...step });
-  const [pollOptions, setPollOptions]     = useState<PollOption[]>([{ label: "", order_index: 0 }, { label: "", order_index: 1 }]);
-  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([{ label: "", order_index: 0 }]);
-  const [matchingPairs, setMatchingPairs] = useState<MatchingPair[]>([{ left_item: "", right_item: "", order_index: 0 }, { left_item: "", right_item: "", order_index: 1 }]);
+  const [pollOptions, setPollOptions]     = useState<PollOption[]>(() => {
+    const existing = (step as Record<string, unknown>)._pollOptions as PollOption[] | undefined;
+    return existing?.length ? existing : [{ label: "", order_index: 0 }, { label: "", order_index: 1 }];
+  });
+  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>(() => {
+    const existing = (step as Record<string, unknown>)._checklistItems as ChecklistItem[] | undefined;
+    return existing?.length ? existing : [{ label: "", order_index: 0 }];
+  });
+  const [matchingPairs, setMatchingPairs] = useState<MatchingPair[]>(() => {
+    const existing = (step as Record<string, unknown>)._matchingPairs as MatchingPair[] | undefined;
+    return existing?.length ? existing : [{ left_item: "", right_item: "", order_index: 0 }, { left_item: "", right_item: "", order_index: 1 }];
+  });
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -64,19 +73,17 @@ function StepForm({ step, onSave, onCancel, lessonId }: {
   const supabase = supabaseBrowser();
 
   useEffect(() => {
-    if (step.id && step.type === "matching") {
-      supabase.from("lesson_step_matching_pairs").select("*").eq("step_id", step.id).order("order_index")
-        .then(({ data }) => { if (data && data.length > 0) setMatchingPairs(data as MatchingPair[]); });
+    const s = step as unknown as Record<string, unknown>;
+    if (s._matchingPairs && Array.isArray(s._matchingPairs) && s._matchingPairs.length > 0) {
+      setMatchingPairs(s._matchingPairs as MatchingPair[]);
     }
-    if (step.id && step.type === "poll") {
-      supabase.from("lesson_step_poll_options").select("*").eq("step_id", step.id).order("order_index")
-        .then(({ data }) => { if (data && data.length > 0) setPollOptions(data as PollOption[]); });
+    if (s._pollOptions && Array.isArray(s._pollOptions) && s._pollOptions.length > 0) {
+      setPollOptions(s._pollOptions as PollOption[]);
     }
-    if (step.id && step.type === "checklist") {
-      supabase.from("lesson_step_checklist_items").select("*").eq("step_id", step.id).order("order_index")
-        .then(({ data }) => { if (data && data.length > 0) setChecklistItems(data as ChecklistItem[]); });
+    if (s._checklistItems && Array.isArray(s._checklistItems) && s._checklistItems.length > 0) {
+      setChecklistItems(s._checklistItems as ChecklistItem[]);
     }
-  }, [step.id]);
+  }, []);
 
   async function uploadFile(file: File, bucket: string, field: keyof Step) {
     setUploading(true);
@@ -518,6 +525,27 @@ export default function AdminLessonStepsPage() {
     setSteps(remaining.map((s, i) => ({ ...s, order_index: i })));
   }
 
+  async function openEditStep(step: Step) {
+    // Pre-load extras before opening form
+    let matchingPairs: MatchingPair[] = [];
+    let pollOptions: PollOption[] = [];
+    let checklistItems: ChecklistItem[] = [];
+    
+    if (step.type === "matching") {
+      const { data } = await supabase.from("lesson_step_matching_pairs").select("*").eq("step_id", step.id).order("order_index");
+      matchingPairs = (data as MatchingPair[]) ?? [];
+    }
+    if (step.type === "poll") {
+      const { data } = await supabase.from("lesson_step_poll_options").select("*").eq("step_id", step.id).order("order_index");
+      pollOptions = (data as PollOption[]) ?? [];
+    }
+    if (step.type === "checklist") {
+      const { data } = await supabase.from("lesson_step_checklist_items").select("*").eq("step_id", step.id).order("order_index");
+      checklistItems = (data as ChecklistItem[]) ?? [];
+    }
+    setEditingStep({ ...step, _matchingPairs: matchingPairs, _pollOptions: pollOptions, _checklistItems: checklistItems } as unknown as Partial<Step> & { type: StepType });
+  }
+
   async function moveStep(id: string, dir: "up" | "down") {
     const idx = steps.findIndex(s => s.id === id);
     if (dir === "up" && idx === 0) return;
@@ -610,7 +638,7 @@ export default function AdminLessonStepsPage() {
                     className="rounded-lg border border-slate-200 p-2 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-30 transition">↑</button>
                   <button onClick={() => moveStep(step.id, "down")} disabled={i === steps.length - 1 || busy === step.id}
                     className="rounded-lg border border-slate-200 p-2 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-30 transition">↓</button>
-                  <button onClick={() => setEditingStep({ ...step })}
+                  <button onClick={() => openEditStep(step)}
                     className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition">Edit</button>
                   <button onClick={() => deleteStep(step.id)}
                     className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-100 transition">Delete</button>
