@@ -1,6 +1,7 @@
 import "./globals.css";
 import { Nunito, Fredoka } from "next/font/google";
 import SiteHeader from "@/components/SiteHeader";
+import HelpButton from "@/components/HelpButton";
 
 const bodyFont = Nunito({
   subsets: ["latin"],
@@ -38,10 +39,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* FOOTER */}
         <footer className="border-t border-emerald-100 bg-white/70">
-          <div className="mx-auto max-w-6xl px-6 py-8 text-sm text-slate-500">
-            © {new Date().getFullYear()} SkillSprout • Where skills grow.
+          <div className="mx-auto max-w-6xl px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
+            <span>© {new Date().getFullYear()} SkillSprout • Where skills grow.</span>
+            <div className="flex items-center gap-4">
+              <a href="/contact" className="hover:text-emerald-600 font-semibold transition">Contact Us</a>
+              <a href="/about" className="hover:text-emerald-600 font-semibold transition">About</a>
+            </div>
           </div>
         </footer>
+
+        {/* Floating help button */}
+        <HelpButton />
       </body>
     </html>
   );

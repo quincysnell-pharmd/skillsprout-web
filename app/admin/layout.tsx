@@ -53,6 +53,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { label: "Futures",    href: "/admin/careers",    emoji: "🚀" },
     { label: "Users",      href: "/admin/users",      emoji: "👥" },
     { label: "Announcements", href: "/admin/announcements", emoji: "📣" },
+    { label: "Support",       href: "/admin/support",       emoji: "💬" },
   ];
 
   if (checking) {
