@@ -1,6 +1,7 @@
 import "./globals.css";
 import { Nunito, Fredoka } from "next/font/google";
 import SiteHeader from "@/components/SiteHeader";
+import HelpButtonWrapper from "@/components/HelpButtonWrapper";
 
 const bodyFont = Nunito({
   subsets: ["latin"],
@@ -18,9 +19,6 @@ export const metadata = {
   title: "SkillSprout",
   description: "Where skills grow.",
 };
-
-import dynamic from "next/dynamic";
-const ClientHelpButton = dynamic(() => import("@/components/HelpButton"), { ssr: false });
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -51,7 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </footer>
 
         {/* Floating help button */}
-        <ClientHelpButton />
+        <HelpButtonWrapper />
       </body>
     </html>
   );
