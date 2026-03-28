@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
 
 // ── Types ─────────────────────────────────────────────────────
-type StepType = "text"|"video"|"pdf"|"image"|"audio"|"quiz"|"poll"|"matching"|"checklist"|"reflection"|"interactive"|"portfolio"|"journal"|"table";
+type StepType = "text"|"video"|"pdf"|"image"|"audio"|"quiz"|"poll"|"matching"|"checklist"|"reflection"|"interactive"|"portfolio"|"journal"|"table"|"worksheet";
 
 interface Step {
   id: string;
@@ -42,6 +42,7 @@ const STEP_TYPES: { type: StepType; icon: string; label: string; color: string }
   { type: "portfolio",   icon: "📈", label: "Portfolio",      color: "bg-green-50 border-green-200 text-green-700"    },
   { type: "journal",     icon: "✏️", label: "Journal Prompt", color: "bg-yellow-50 border-yellow-200 text-yellow-700"  },
   { type: "table",       icon: "📋", label: "Table",           color: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+  { type: "worksheet",   icon: "📊", label: "Worksheet",       color: "bg-blue-50 border-blue-200 text-blue-700"           },
 ];
 
 const inputCls = "w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100 transition";
@@ -516,6 +517,26 @@ function StepForm({ step, onSave, onCancel, lessonId }: {
               </div>
               <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3">
                 <p className="text-xs font-bold text-yellow-800">✏️ Private warm-up prompt. Students type their response but it is <span className="underline">not</span> saved to their profile or posted anywhere — it's just to get them thinking.</p>
+              </div>
+            </div>
+          )}
+
+          {/* WORKSHEET */}
+          {step.type === "worksheet" && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1.5">Worksheet HTML *</label>
+                <p className="text-xs font-semibold text-slate-400 mb-2">Paste the full HTML of your worksheet. It will be embedded in the lesson and student responses will be saved automatically.</p>
+                <textarea
+                  className={textareaCls}
+                  rows={12}
+                  value={form.content ?? ""}
+                  onChange={e => set("content", e.target.value)}
+                  placeholder="Paste your HTML here..."
+                />
+              </div>
+              <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+                <p className="text-xs font-bold text-blue-800">📊 Students will see this worksheet embedded in the lesson. Their responses are automatically saved to Supabase and will be there when they return on any device.</p>
               </div>
             </div>
           )}

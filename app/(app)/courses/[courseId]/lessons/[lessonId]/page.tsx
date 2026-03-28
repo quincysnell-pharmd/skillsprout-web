@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
 import { AddToPortfolioForm, PortfolioAddedBanner } from "@/components/portfolio/AddToPortfolioForm";
 import { CommunityPostForm, PostSubmittedBanner } from "@/components/community/CommunityPostForm";
 
 // ── Types ─────────────────────────────────────────────────────
-type StepType = "text"|"video"|"pdf"|"image"|"audio"|"quiz"|"poll"|"matching"|"checklist"|"reflection"|"interactive"|"portfolio"|"journal";
+type StepType = "text"|"video"|"pdf"|"image"|"audio"|"quiz"|"poll"|"matching"|"checklist"|"reflection"|"interactive"|"portfolio"|"journal"|"table"|"worksheet";
 
 interface Step {
   id: string;
@@ -294,7 +294,6 @@ function ChecklistStep({ step, childId, onComplete }: { step: Step; childId: str
   }
 
   const allDone = items.length > 0 && items.every(it => checked.has(it.id));
-
   useEffect(() => { if (allDone) onComplete(); }, [allDone]);
 
   if (loading) return <div className="text-center py-8"><div className="text-3xl animate-bounce">✅</div></div>;
@@ -355,9 +354,12 @@ function MatchingStep({ step, onComplete }: { step: Step; onComplete: () => void
     if (matched.has(id)) return;
     if (!selected) { setSelected({ side, id, value }); return; }
     if (selected.side === side) { setSelected({ side, id, value }); return; }
-    // Check if correct pair
-    if (selected.id === id) {
-      setMatched(prev => new Set([...prev, id]));
+    const leftId = selected.side === "left" ? selected.id : id;
+    const rightValue = selected.side === "right" ? selected.value : value;
+    const leftPair = pairs.find(p => p.id === leftId);
+    const isCorrect = leftPair && leftPair.right_item === rightValue;
+    if (isCorrect) {
+      setMatched(prev => new Set([...prev, leftId, (selected.side === "right" ? selected.id : id)]));
       setSelected(null);
       setWrong(null);
     } else {
@@ -366,7 +368,7 @@ function MatchingStep({ step, onComplete }: { step: Step; onComplete: () => void
     }
   }
 
-  const allMatched = pairs.length > 0 && matched.size === pairs.length;
+  const allMatched = pairs.length > 0 && matched.size >= pairs.length * 2;
   useEffect(() => { if (allMatched) setTimeout(onComplete, 800); }, [allMatched]);
 
   if (loading) return <div className="text-center py-8"><div className="text-3xl animate-bounce">🔢</div></div>;
@@ -405,8 +407,59 @@ function MatchingStep({ step, onComplete }: { step: Step; onComplete: () => void
   );
 }
 
+// ── Journal Step ─────────────────────────────────────────────
+function JournalStep({ step, childId, lessonId, courseId, onComplete, isCompleted }: {
+  step: Step; childId: string; lessonId: string; courseId: string; onComplete: () => void; isCompleted: boolean;
+}) {
+  const supabase = supabaseBrowser();
+  const [text, setText]   = useState("");
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    supabase.from("journal_entries")
+      .select("response").eq("child_id", childId).eq("step_id", step.id).maybeSingle()
+      .then(({ data }) => { if (data?.response) { setText(data.response); setSaved(true); } });
+  }, [step.id, childId]);
+
+  async function save() {
+    if (!text.trim()) return;
+    setSaving(true);
+    await supabase.from("journal_entries").upsert({
+      child_id: childId, step_id: step.id, lesson_id: lessonId, course_id: courseId,
+      prompt: step.content, response: text.trim(), updated_at: new Date().toISOString(),
+    }, { onConflict: "child_id,step_id" });
+    setSaved(true);
+    setSaving(false);
+    if (!isCompleted) onComplete();
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 flex items-center gap-2">
+        <span>✏️</span>
+        <p className="text-xs font-bold text-yellow-800">Private journal — only you can see this. It will be saved to your journal.</p>
+      </div>
+      {step.content && <p className="text-sm font-bold text-slate-700">{step.content}</p>}
+      <textarea rows={5} value={text} onChange={e => { setText(e.target.value); setSaved(false); }}
+        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-yellow-400 focus:ring-4 focus:ring-yellow-100 transition resize-none"
+        placeholder="Write your thoughts here..." />
+      {saved ? (
+        <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm font-bold text-yellow-800">✅ Saved to your private journal!</div>
+      ) : (
+        <button onClick={save} disabled={!text.trim() || saving}
+          className="rounded-xl bg-yellow-500 px-6 py-3 font-bold text-white hover:bg-yellow-600 disabled:opacity-40 transition">
+          {saving ? "Saving..." : "Save to Journal ✏️"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── Reflection Step ───────────────────────────────────────────
-function ReflectionStep({ step, childId, courseId, onComplete }: { step: Step; childId: string; courseId: string; onComplete: () => void; }) {
+function ReflectionStep({ step, childId, courseId, lessonId, onComplete }: {
+  step: Step; childId: string; courseId: string; lessonId: string; onComplete: () => void;
+}) {
   const supabase = supabaseBrowser();
   const [text, setText]         = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -439,11 +492,115 @@ function ReflectionStep({ step, childId, courseId, onComplete }: { step: Step; c
         <div className="space-y-3">
           <div className="rounded-xl border border-pink-200 bg-pink-50 px-4 py-3 text-sm font-bold text-pink-700">✅ Reflection saved to your profile!</div>
           {!shared && (
-            <button onClick={() => setSharing(true)} className="rounded-xl border-2 border-pink-200 bg-white px-5 py-2.5 text-sm font-bold text-pink-600 hover:bg-pink-50 transition">
-              🌱 Share with Community
+            <button onClick={() => setSharing(true)}
+              className="rounded-xl border-2 border-pink-200 bg-white px-5 py-2.5 text-sm font-bold text-pink-600 hover:bg-pink-50 transition">
+              🌱 Share with Community (optional)
             </button>
           )}
+          {sharing && !shared && (
+            <CommunityPostForm childId={childId} courseId={courseId} lessonId={lessonId}
+              onClose={() => setSharing(false)}
+              onSubmitted={() => { setSharing(false); setShared(true); }} />
+          )}
           {shared && <div className="text-xs font-bold text-emerald-600">🌱 Shared to community feed (pending review)!</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Worksheet Step ────────────────────────────────────────────
+function WorksheetStep({ step, childId, lessonId, courseId, onComplete, isCompleted }: {
+  step: Step; childId: string; lessonId: string; courseId: string; onComplete: () => void; isCompleted: boolean;
+}) {
+  const supabase = supabaseBrowser();
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [saving, setSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load saved data and send to iframe when it's ready
+  useEffect(() => {
+    async function loadSaved() {
+      const { data } = await supabase.from("worksheet_responses")
+        .select("response_data").eq("child_id", childId).eq("step_id", step.id).maybeSingle();
+      if (data?.response_data) {
+        // Wait for iframe to signal ready, then send data
+        const sendData = () => {
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "LOAD_WORKSHEET_DATA", data: data.response_data }, "*"
+          );
+        };
+        // Try immediately and also on a delay as fallback
+        sendData();
+        setTimeout(sendData, 1000);
+        setTimeout(sendData, 2500);
+      }
+    }
+    loadSaved();
+  }, [step.id, childId]);
+
+  // Listen for data from iframe
+  useEffect(() => {
+    async function handleMessage(e: MessageEvent) {
+      if (e.data?.type === "WORKSHEET_READY") {
+        // Iframe loaded - re-send saved data
+        const { data } = await supabase.from("worksheet_responses")
+          .select("response_data").eq("child_id", childId).eq("step_id", step.id).maybeSingle();
+        if (data?.response_data) {
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "LOAD_WORKSHEET_DATA", data: data.response_data }, "*"
+          );
+        }
+      }
+      if (e.data?.type === "WORKSHEET_DATA") {
+        // Debounce save
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = setTimeout(async () => {
+          setSaving(true);
+          await supabase.from("worksheet_responses").upsert({
+            child_id: childId, step_id: step.id, lesson_id: lessonId, course_id: courseId,
+            response_data: e.data.data, updated_at: new Date().toISOString(),
+          }, { onConflict: "child_id,step_id" });
+          setLastSaved(new Date().toLocaleTimeString());
+          setSaving(false);
+        }, 500);
+      }
+    }
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [childId, step.id, lessonId, courseId]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+          <span>📋</span>
+          <p className="text-xs font-bold text-emerald-800">Your work is automatically saved as you type.</p>
+        </div>
+        <div className="text-xs font-semibold text-slate-400">
+          {saving ? "Saving..." : lastSaved ? `Saved ${lastSaved}` : ""}
+        </div>
+      </div>
+      <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+        <iframe
+          ref={iframeRef}
+          srcDoc={step.content ?? ""}
+          className="w-full"
+          style={{ height: "80vh", border: "none" }}
+          sandbox="allow-scripts allow-same-origin allow-forms"
+          title="Worksheet"
+        />
+      </div>
+      {!isCompleted && (
+        <button onClick={onComplete}
+          className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 transition">
+          ✅ Mark as Complete & Continue
+        </button>
+      )}
+      {isCompleted && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 text-center">
+          ✅ Completed! Your work is saved.
         </div>
       )}
     </div>
@@ -570,24 +727,57 @@ function StepContent({ step, childId, courseId, lessonId, onComplete, isComplete
       {/* REFLECTION */}
       {step.type === "reflection" && (
         <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-          <ReflectionStep step={step} childId={childId} courseId={courseId} onComplete={onComplete} />
+          <ReflectionStep step={step} childId={childId} courseId={courseId} lessonId={lessonId} onComplete={onComplete} />
         </div>
       )}
 
       {/* JOURNAL */}
       {step.type === "journal" && (
-        <div className="space-y-4">
-          <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3">
-            <p className="text-xs font-bold text-yellow-800">✏️ Private warm-up — your answer won't be saved or shared anywhere.</p>
-          </div>
-          {step.content && <p className="text-sm font-bold text-slate-700">{step.content}</p>}
-          <textarea
-            rows={5}
-            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100 transition resize-none"
-            placeholder="Write your thoughts here..."
-            onChange={() => { if (!isCompleted) onComplete(); }}
-          />
+        <JournalStep step={step} childId={childId} lessonId={lessonId} courseId={courseId} onComplete={onComplete} isCompleted={isCompleted} />
+      )}
+
+      {/* TABLE */}
+      {step.type === "table" && step.content && (
+        <div className="space-y-3">
+          {(() => {
+            try {
+              const tableData = JSON.parse(step.content) as { headers: string[]; rows: string[][]; before?: string; after?: string };
+              return (
+                <>
+                  {tableData.before && <p className="text-sm font-semibold text-slate-700 leading-relaxed">{tableData.before}</p>}
+                  <div className="overflow-x-auto rounded-2xl border border-emerald-100 shadow-sm">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="bg-gradient-to-r from-emerald-500 to-teal-500">
+                          {tableData.headers.map((h, i) => (
+                            <th key={i} className="px-5 py-3 text-left text-xs font-black text-white uppercase tracking-wide">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tableData.rows.map((row, ri) => (
+                          <tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-emerald-50/50"}>
+                            {row.map((cell, ci) => (
+                              <td key={ci} className={`px-5 py-3 text-sm font-semibold border-b border-slate-100 ${ci === 0 ? "text-emerald-800 font-bold" : "text-slate-700"}`}>{cell}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {tableData.after && <p className="text-sm font-semibold text-slate-700 leading-relaxed">{tableData.after}</p>}
+                </>
+              );
+            } catch {
+              return <p className="p-4 text-sm text-slate-400">Table data could not be loaded.</p>;
+            }
+          })()}
         </div>
+      )}
+
+      {/* WORKSHEET */}
+      {step.type === "worksheet" && (
+        <WorksheetStep step={step} childId={childId} lessonId={lessonId} courseId={courseId} onComplete={onComplete} isCompleted={isCompleted} />
       )}
 
       {/* PORTFOLIO */}
@@ -607,10 +797,10 @@ function StepContent({ step, childId, courseId, lessonId, onComplete, isComplete
         </div>
       )}
 
-      {/* INTERACTIVE (Community Post) */}
+      {/* INTERACTIVE (Community Post) — kept for backward compat */}
       {step.type === "interactive" && (
         <div className="rounded-2xl border-2 border-orange-300 bg-gradient-to-br from-orange-50 to-amber-50 p-6 text-center space-y-4">
-          <div className="text-4xl">🎮</div>
+          <div className="text-4xl">🌱</div>
           <h3 className="font-display text-lg font-bold text-orange-900">Share with the Community!</h3>
           <p className="text-sm font-semibold text-orange-700">{step.content || "Share what you learned or made with the SkillSprout community!"}</p>
           {communitySubmitted
@@ -663,18 +853,15 @@ export default function LessonStepPlayerPage() {
     setLesson(lo);
     setSteps(st);
 
-    // Load completed steps and saved position
     const [{ data: prog }, { data: savedPos }] = await Promise.all([
       supabase.from("lesson_step_progress").select("step_id").eq("child_id", cr.id).eq("completed", true).in("step_id", st.map(s => s.id)),
       supabase.from("lesson_progress").select("current_step_index").eq("child_id", cr.id).eq("lesson_id", lessonId).maybeSingle(),
     ]);
     setCompleted(new Set((prog ?? []).map((p: { step_id: string }) => p.step_id)));
-    // Resume from saved position
     if (savedPos?.current_step_index && savedPos.current_step_index < st.length) {
       setCurrentIdx(savedPos.current_step_index);
     }
 
-    // Load next lesson
     if (lo) {
       const { data: nd } = await supabase.from("lessons").select("id, title").eq("course_id", lo.course_id).eq("is_published", true).gt("order_index", lo.order_index).order("order_index").limit(1).maybeSingle();
       setNextLesson(nd as { id: string; title: string } ?? null);
@@ -685,9 +872,15 @@ export default function LessonStepPlayerPage() {
 
   function markComplete(stepId: string) {
     setCompleted(prev => new Set([...prev, stepId]));
+    // Also save to lesson_step_progress
+    if (childId) {
+      supabaseBrowser().from("lesson_step_progress").upsert(
+        { child_id: childId, step_id: stepId, completed: true, updated_at: new Date().toISOString() },
+        { onConflict: "child_id,step_id" }
+      );
+    }
   }
 
-  // Save current step position whenever it changes
   useEffect(() => {
     if (!childId || !lessonId) return;
     supabase.from("lesson_progress").upsert(
@@ -699,10 +892,8 @@ export default function LessonStepPlayerPage() {
   async function finishLesson() {
     if (!childId || !lesson) return;
     await supabase.from("lesson_progress").upsert({ child_id: childId, lesson_id: lessonId, completed: true, completed_at: new Date().toISOString() }, { onConflict: "child_id,lesson_id" });
-    // Award XP
     const { data: cr } = await supabase.from("child_profiles").select("xp").eq("id", childId).maybeSingle();
     if (cr) await supabase.from("child_profiles").update({ xp: (cr.xp ?? 0) + lesson.xp_reward }).eq("id", childId);
-    // Update enrollment progress
     const { data: allL } = await supabase.from("lessons").select("id").eq("course_id", lesson.course_id).eq("is_published", true);
     const { data: doneL } = await supabase.from("lesson_progress").select("id").eq("child_id", childId).eq("completed", true).in("lesson_id", (allL ?? []).map((l: { id: string }) => l.id));
     const pct = Math.round(((doneL?.length ?? 0) / (allL?.length ?? 1)) * 100);
@@ -714,7 +905,6 @@ export default function LessonStepPlayerPage() {
   if (loading) return <div className="flex min-h-[60vh] items-center justify-center"><div className="text-5xl animate-bounce">📖</div></div>;
   if (!lesson) return <div className="text-center py-20"><p className="font-bold text-slate-400">Lesson not found.</p></div>;
 
-  // ── No steps: show fallback content view ──────────────────
   if (steps.length === 0) {
     return (
       <div className="max-w-2xl mx-auto space-y-5 py-6 px-4">
@@ -727,11 +917,7 @@ export default function LessonStepPlayerPage() {
           </div>
           <span className="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">⭐ {lesson.xp_reward} XP</span>
         </div>
-        <LessonFallbackView
-          lesson={lesson}
-          nextLesson={nextLesson}
-          onComplete={finishLesson}
-        />
+        <LessonFallbackView lesson={lesson} nextLesson={nextLesson} onComplete={finishLesson} />
       </div>
     );
   }
@@ -745,7 +931,6 @@ export default function LessonStepPlayerPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-5 py-6 px-4">
-      {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={() => router.push(`/courses/${courseId}`)}
           className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 transition">← Back</button>
@@ -756,7 +941,6 @@ export default function LessonStepPlayerPage() {
         <span className="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">⭐ {lesson.xp_reward} XP</span>
       </div>
 
-      {/* Step progress bar */}
       <div className="flex gap-1.5">
         {steps.map((s, i) => (
           <button key={s.id} onClick={() => { if (i <= currentIdx || completed.has(s.id)) setCurrentIdx(i); }}
@@ -768,7 +952,6 @@ export default function LessonStepPlayerPage() {
         ))}
       </div>
 
-      {/* Current step */}
       {currentStep && childId && (
         <StepContent
           step={currentStep}
@@ -780,13 +963,11 @@ export default function LessonStepPlayerPage() {
         />
       )}
 
-      {/* Navigation */}
       <div className="flex items-center justify-between pt-2">
         <button onClick={() => setCurrentIdx(i => i - 1)} disabled={currentIdx === 0}
           className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-30 transition">
           ← Previous
         </button>
-
         {isLastStep ? (
           <button onClick={finishLesson} disabled={!canGoNext}
             className="rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-40 transition">
