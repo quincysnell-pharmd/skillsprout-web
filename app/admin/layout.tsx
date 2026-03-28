@@ -18,20 +18,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   async function checkAdmin() {
     setChecking(true);
     try {
-      // Try session first, then getUser as fallback
-      let userId: string | null = null;
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        userId = session.user.id;
-      } else {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) userId = user.id;
-      }
+      // Always use getUser which is more reliable than getSession after full page reload
+      const { data: { user } } = await supabase.auth.getUser();
 
-      if (!userId) { router.replace("/auth"); return; }
+      if (!user) { router.replace("/auth"); return; }
 
-      const { data: adminRow, error: adminError } = await supabase
-        .from("admins").select("id").eq("user_id", userId).maybeSingle();
+      const { data: adminRow } = await supabase
+        .from("admins").select("id").eq("user_id", user.id).maybeSingle();
 
       if (!adminRow) { router.replace("/auth"); return; }
 
