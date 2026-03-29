@@ -26,6 +26,8 @@ type Course = {
   is_free?: boolean;
   price_cents?: number;
   is_published?: boolean;
+  coming_soon?: boolean;
+  sale_price_cents?: number | null;
   slug?: string;
 };
 
@@ -109,6 +111,8 @@ function CourseCard({
   onClick: () => void;
 }) {
   const price = ((course.price_cents ?? 0) / 100).toFixed(2);
+  const salePrice = course.sale_price_cents != null && course.sale_price_cents > 0
+    ? (course.sale_price_cents / 100).toFixed(2) : null;
   const isLocked = role === "child" && !paid;
 
   return (
@@ -136,7 +140,9 @@ function CourseCard({
         <div className="mt-4 flex flex-wrap gap-2">
           {course.age_min && <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">Ages {course.age_min}–{course.age_max}</span>}
           {course.lesson_count && <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">{course.lesson_count} lessons</span>}
-          {(course.price_cents ?? 0) > 0
+          {course.coming_soon ? (
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">🔜 Coming Soon</span>
+          ) : (course.price_cents ?? 0) > 0
             ? <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">${price}</span>
             : <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Free</span>}
         </div>

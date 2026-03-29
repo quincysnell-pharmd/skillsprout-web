@@ -18,6 +18,8 @@ interface Course {
   stripe_price_id: string;
   topics: string[];
   prerequisites: string[];
+  coming_soon: boolean;
+  sale_price_cents: number | null;
 }
 
 const BLANK: Omit<Course, "id"> = {
@@ -26,6 +28,8 @@ const BLANK: Omit<Course, "id"> = {
   price_cents: 0, stripe_price_id: "",
   topics: [""],
   prerequisites: [""],
+  coming_soon: false,
+  sale_price_cents: null,
 };
 
 const CATEGORIES = ["cooking","coding","gardening","money","art","science","music","writing"];
@@ -290,6 +294,30 @@ export default function AdminCourses() {
             </div>
           </Field>
 
+          <Field label="Sale Price (USD)">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-semibold text-slate-500">$</span>
+              <input
+                className={inputCls}
+                type="text"
+                inputMode="decimal"
+                value={form.sale_price_cents != null ? (form.sale_price_cents / 100).toFixed(2) : ""}
+                onChange={(e) => {
+                  const parsed = parseFloat(e.target.value);
+                  if (e.target.value === "" || e.target.value === null) {
+                    set("sale_price_cents", null);
+                  } else if (!isNaN(parsed)) {
+                    set("sale_price_cents", Math.round(parsed * 100));
+                  }
+                }}
+                placeholder="Leave blank for no sale"
+              />
+              {form.sale_price_cents != null && form.sale_price_cents > 0 && (
+                <span className="text-xs font-bold text-rose-600">ON SALE</span>
+              )}
+            </div>
+          </Field>
+
           <Field label="Stripe Price ID">
             <input
               className={inputCls}
@@ -297,6 +325,18 @@ export default function AdminCourses() {
               onChange={(e) => set("stripe_price_id", e.target.value)}
               placeholder="price_1... (from Stripe dashboard)"
             />
+          </Field>
+
+          <Field label="Coming Soon">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.coming_soon ?? false}
+                onChange={(e) => set("coming_soon", e.target.checked)}
+                className="h-4 w-4 rounded accent-violet-600"
+              />
+              <span className="text-sm font-semibold text-slate-700">Mark as Coming Soon (visible but not enrollable)</span>
+            </label>
           </Field>
 
           <Field label="Status">

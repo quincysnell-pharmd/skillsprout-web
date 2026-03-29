@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     // Step 4: Fetch course
     const { data: course, error: courseError } = await supabase
       .from("courses")
-      .select("id, title, price_cents, stripe_price_id")
+      .select("id, title, price_cents, stripe_price_id, sale_price_cents")
       .eq("id", courseId)
       .maybeSingle();
 
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
         line_items: [{
           price_data: {
             currency: "usd",
-            unit_amount: course.price_cents ?? 999,
+            unit_amount: (course.sale_price_cents != null && course.sale_price_cents > 0 ? course.sale_price_cents : course.price_cents) ?? 999,
             product_data: {
               name: `${course.title} — for ${childName}`,
               description: `SkillSprout course access for ${childName}`,

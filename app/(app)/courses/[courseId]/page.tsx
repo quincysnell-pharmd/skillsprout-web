@@ -14,6 +14,8 @@ interface Course {
   bg?: string;
   price_cents: number;
   stripe_price_id?: string;
+  coming_soon?: boolean;
+  sale_price_cents?: number | null;
   topics?: string[];
   prerequisites?: string[];
   final_project?: string;
@@ -182,8 +184,40 @@ export default function CourseOverviewPage() {
   const isPaid    = role === "child" && enrollment?.paid === true;
   const pct       = lessons.length > 0 ? Math.round((completedCount() / lessons.length) * 100) : 0;
   const totalXP   = lessons.reduce((sum, l) => sum + (l.xp_reward ?? 0), 0);
-  const price     = ((course.price_cents ?? 999) / 100).toFixed(2);
-  const isFree    = (course.price_cents ?? 0) === 0;
+  const listPrice  = ((course.price_cents ?? 999) / 100).toFixed(2);
+  const salePrice  = course.sale_price_cents != null && course.sale_price_cents > 0
+    ? (course.sale_price_cents / 100).toFixed(2) : null;
+  const price      = salePrice ?? listPrice;
+  const isFree     = (course.price_cents ?? 0) === 0;
+  const isOnSale   = salePrice !== null;
+  const isComingSoon = course.coming_soon ?? false;
+
+  // ── COMING SOON VIEW ──────────────────────────────────────────
+  if (isComingSoon) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-5 py-6 px-4">
+        <button onClick={() => router.push("/courses")}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 transition">← Back to Courses</button>
+        <div className="rounded-3xl overflow-hidden border border-slate-100 shadow-sm bg-white">
+          <div className="bg-gradient-to-br from-amber-400 to-orange-500 p-10 text-center space-y-4">
+            <div className="text-6xl">🔜</div>
+            <h1 className="font-display text-3xl font-black text-white">{course.title}</h1>
+            <span className="inline-block rounded-full bg-white/20 px-4 py-1.5 text-sm font-bold text-white">Coming Soon</span>
+          </div>
+          <div className="p-8 text-center space-y-4">
+            {course.description && <p className="text-sm font-semibold text-slate-600 leading-relaxed">{course.description}</p>}
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4">
+              <p className="text-sm font-bold text-amber-800">🌱 This course is coming soon! Check back later to enroll.</p>
+            </div>
+            <button onClick={() => router.push("/courses")}
+              className="rounded-xl bg-emerald-600 px-6 py-3 font-bold text-white hover:bg-emerald-700 transition">
+              Browse Available Courses →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── PREVIEW VIEW (parents + unpaid/unlinked kids) ─────────────
   if (!isPaid) {
@@ -321,7 +355,7 @@ export default function CourseOverviewPage() {
                   disabled={unlocking || (children.length > 1 && !selectedChild)}
                   className="w-full rounded-2xl bg-emerald-600 py-4 text-base font-black text-white hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {unlocking ? "Redirecting to checkout..." : isFree ? "Unlock Free Course 🎉" : `Unlock for $${price} →`}
+                  {unlocking ? "Redirecting to checkout..." : isFree ? "Unlock Free Course 🎉" : isOnSale ? `Unlock for $${salePrice} (was $${listPrice}) →` : `Unlock for $${price} →`}
                 </button>
                 <p className="text-center text-xs font-semibold text-slate-400">Secure payment via Stripe</p>
               </>
