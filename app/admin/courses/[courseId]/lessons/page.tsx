@@ -47,6 +47,16 @@ interface LessonFile {
   size_bytes: number;
 }
 
+interface LessonResource {
+  id: string;
+  lesson_id: string;
+  title: string;
+  type: "link" | "pdf" | "note" | "video";
+  url?: string;
+  note_content?: string;
+  order_index: number;
+}
+
 interface Project {
   id: string;
   course_id: string;
@@ -121,7 +131,6 @@ function QuizEditor({ lessonId, onClose }: { lessonId: string; onClose: () => vo
           <h2 className="font-display text-xl font-bold text-slate-900">⚡ Quiz Questions</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
         </div>
-
         {questions.length > 0 && (
           <div className="p-6 space-y-3 border-b border-slate-100">
             {questions.map((q, i) => (
@@ -149,7 +158,6 @@ function QuizEditor({ lessonId, onClose }: { lessonId: string; onClose: () => vo
             ))}
           </div>
         )}
-
         <div className="p-6 space-y-4">
           <h3 className="font-bold text-slate-700">{editing ? "Edit Question" : "Add Question"}</h3>
           <div>
@@ -278,6 +286,143 @@ function FileUploader({ lessonId, onClose }: { lessonId: string; onClose: () => 
             <p className="text-center text-sm font-semibold text-slate-400">No files uploaded yet.</p>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── RESOURCES EDITOR ───────────────────────────────────────────────────────
+function ResourcesEditor({ lessonId }: { lessonId: string }) {
+  const supabase = supabaseBrowser();
+  const [resources, setResources] = useState<LessonResource[]>([]);
+  const [type, setType] = useState<"link" | "pdf" | "note" | "video">("link");
+  const [title, setTitle] = useState("");
+  const [url, setUrl] = useState("");
+  const [note, setNote] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { load(); }, [lessonId]);
+
+  async function load() {
+    const { data } = await supabase.from("lesson_resources").select("*").eq("lesson_id", lessonId).order("order_index");
+    setResources((data as LessonResource[]) ?? []);
+  }
+
+  async function uploadPdf(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const ext = file.name.split(".").pop();
+    const path = `resources/${lessonId}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("course-files").upload(path, file);
+    if (error) { alert("Upload failed: " + error.message); setUploading(false); return; }
+    const { data: { publicUrl } } = supabase.storage.from("course-files").getPublicUrl(path);
+    setUrl(publicUrl);
+    if (!title) setTitle(file.name.replace(/\.[^.]+$/, ""));
+    setUploading(false);
+  }
+
+  async function add() {
+    if (!title.trim()) return;
+    if ((type === "link" || type === "pdf" || type === "video") && !url.trim()) return;
+    if (type === "note" && !note.trim()) return;
+    setBusy(true);
+    await supabase.from("lesson_resources").insert({
+      lesson_id: lessonId,
+      title: title.trim(),
+      type,
+      url: url.trim() || null,
+      note_content: note.trim() || null,
+      order_index: resources.length,
+    });
+    await load();
+    setTitle(""); setUrl(""); setNote("");
+    setBusy(false);
+  }
+
+  async function del(id: string) {
+    await supabase.from("lesson_resources").delete().eq("id", id);
+    setResources(r => r.filter(x => x.id !== id));
+  }
+
+  const TYPE_ICONS: Record<string, string> = { link: "🔗", pdf: "📄", note: "📝", video: "🎬" };
+
+  return (
+    <div className="space-y-4 pt-4 border-t border-slate-100">
+      <h3 className="text-xs font-black text-slate-500 uppercase tracking-wide">📚 Lesson Resources</h3>
+      <p className="text-xs font-semibold text-slate-400">Students can view these in a Resources tab while going through the lesson.</p>
+
+      {/* Existing resources */}
+      {resources.length > 0 && (
+        <div className="space-y-2">
+          {resources.map(r => (
+            <div key={r.id} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+              <span className="text-lg">{TYPE_ICONS[r.type]}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold text-slate-800 truncate">{r.title}</div>
+                {r.url && <div className="text-xs font-semibold text-slate-400 truncate">{r.url}</div>}
+                {r.note_content && <div className="text-xs font-semibold text-slate-400 truncate">{r.note_content}</div>}
+              </div>
+              <button onClick={() => del(r.id)} className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50">Delete</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add resource form */}
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+        <div className="flex gap-2 flex-wrap">
+          {(["link", "pdf", "note", "video"] as const).map(t => (
+            <button key={t} onClick={() => setType(t)}
+              className={`rounded-xl px-3 py-1.5 text-xs font-bold transition capitalize ${type === t ? "bg-violet-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"}`}>
+              {TYPE_ICONS[t]} {t}
+            </button>
+          ))}
+        </div>
+        <div>
+          <label className={labelCls}>Title *</label>
+          <input className={inputCls} value={title} onChange={e => setTitle(e.target.value)}
+            placeholder={type === "note" ? "e.g. Key Terms" : type === "link" ? "e.g. Investopedia Article" : type === "video" ? "e.g. Intro Video" : "e.g. Study Guide"} />
+        </div>
+        {(type === "link" || type === "video") && (
+          <div>
+            <label className={labelCls}>{type === "video" ? "Video URL *" : "URL *"}</label>
+            <input className={inputCls} value={url} onChange={e => setUrl(e.target.value)}
+              placeholder={type === "video" ? "https://youtube.com/..." : "https://..."} />
+          </div>
+        )}
+        {type === "pdf" && (
+          <div className="space-y-2">
+            <label className={labelCls}>PDF File *</label>
+            {url ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 flex items-center gap-3">
+                <span>📄</span>
+                <div className="flex-1 min-w-0 text-xs font-semibold text-emerald-700 truncate">{url}</div>
+                <button onClick={() => setUrl("")} className="text-xs font-bold text-rose-500">Remove</button>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-white p-4 cursor-pointer hover:border-violet-300 transition">
+                {uploading ? <><div className="animate-spin text-xl">⚙️</div><span className="text-xs font-bold text-violet-600">Uploading…</span></>
+                  : <><span className="text-2xl">📄</span><span className="text-xs font-bold text-slate-600">Click to upload PDF</span></>}
+                <input ref={fileRef} type="file" className="hidden" accept=".pdf" disabled={uploading} onChange={uploadPdf} />
+              </label>
+            )}
+            <input className={inputCls} value={url} onChange={e => setUrl(e.target.value)} placeholder="Or paste a PDF URL" />
+          </div>
+        )}
+        {type === "note" && (
+          <div>
+            <label className={labelCls}>Note Content *</label>
+            <textarea className={textareaCls} rows={3} value={note} onChange={e => setNote(e.target.value)}
+              placeholder="e.g. Key terms to remember: Revenue is the total income a business earns..." />
+          </div>
+        )}
+        <button onClick={add} disabled={busy || uploading}
+          className="rounded-xl bg-violet-600 px-4 py-2 text-xs font-bold text-white hover:bg-violet-700 disabled:opacity-50 transition">
+          {busy ? "Adding…" : "Add Resource"}
+        </button>
       </div>
     </div>
   );
@@ -531,6 +676,9 @@ function LessonForm({
             </button>
           </div>
         )}
+
+        {/* Resources — only for existing lessons */}
+        {lesson && <ResourcesEditor lessonId={lesson.id} />}
 
         <div className="flex gap-3">
           <button onClick={save} disabled={busy || uploading}

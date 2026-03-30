@@ -32,6 +32,11 @@ interface PollOption { id: string; label: string; order_index: number; vote_coun
 interface ChecklistItem { id: string; label: string; order_index: number; }
 interface MatchingPair { id: string; left_item: string; right_item: string; order_index: number; }
 
+interface LessonResource {
+  id: string; title: string; type: string;
+  url?: string; note_content?: string;
+}
+
 interface Lesson {
   id: string; course_id: string; title: string;
   description?: string; xp_reward: number; quiz_question_count: number;
@@ -832,6 +837,8 @@ export default function LessonStepPlayerPage() {
   const [completed, setCompleted]   = useState<Set<string>>(new Set());
   const [loading, setLoading]       = useState(true);
   const [nextLesson, setNextLesson] = useState<{ id: string; title: string } | null>(null);
+  const [resources, setResources] = useState<LessonResource[]>([]);
+  const [showResources, setShowResources] = useState(false);
 
   useEffect(() => { loadData(); }, [lessonId]);
 
@@ -861,6 +868,10 @@ export default function LessonStepPlayerPage() {
     if (savedPos?.current_step_index && savedPos.current_step_index < st.length) {
       setCurrentIdx(savedPos.current_step_index);
     }
+
+    // Load resources
+    const { data: resData } = await supabase.from("lesson_resources").select("*").eq("lesson_id", lessonId).order("order_index");
+    setResources((resData as LessonResource[]) ?? []);
 
     if (lo) {
       const { data: nd } = await supabase.from("lessons").select("id, title").eq("course_id", lo.course_id).eq("is_published", true).gt("order_index", lo.order_index).order("order_index").limit(1).maybeSingle();
@@ -951,6 +962,49 @@ export default function LessonStepPlayerPage() {
             } ${i <= currentIdx || completed.has(s.id) ? "cursor-pointer" : "cursor-not-allowed"}`} />
         ))}
       </div>
+
+      {/* Resources tab */}
+      {resources.length > 0 && (
+        <div>
+          <button onClick={() => setShowResources(r => !r)}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+              showResources ? "bg-violet-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+            }`}>
+            📚 Resources {showResources ? "▲" : "▼"}
+            <span className={`rounded-full px-1.5 py-0.5 text-xs ${showResources ? "bg-white/20 text-white" : "bg-violet-100 text-violet-700"}`}>
+              {resources.length}
+            </span>
+          </button>
+          {showResources && (
+            <div className="mt-2 rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
+                <p className="text-xs font-bold text-slate-500">📚 Lesson Resources</p>
+              </div>
+              <div className="divide-y divide-slate-50">
+                {resources.map(r => (
+                  <div key={r.id} className="px-4 py-3">
+                    {r.type === "note" ? (
+                      <div>
+                        <p className="text-xs font-black text-slate-500 uppercase tracking-wide mb-1">📝 {r.title}</p>
+                        <p className="text-sm font-semibold text-slate-700 leading-relaxed">{r.note_content}</p>
+                      </div>
+                    ) : (
+                      <a href={r.url} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-3 hover:bg-slate-50 rounded-xl p-1 -m-1 transition group">
+                        <span className="text-xl shrink-0">
+                          {r.type === "pdf" ? "📄" : r.type === "video" ? "🎬" : "🔗"}
+                        </span>
+                        <span className="text-sm font-bold text-slate-800 group-hover:text-violet-700 transition">{r.title}</span>
+                        <span className="ml-auto text-xs font-semibold text-slate-400 group-hover:text-violet-500">Open ↗</span>
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {currentStep && childId && (
         <StepContent
