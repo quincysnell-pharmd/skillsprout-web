@@ -37,6 +37,21 @@ interface LessonResource {
   url?: string; note_content?: string;
 }
 
+interface LessonNote {
+  id?: string;
+  child_id: string;
+  lesson_id: string;
+  content: string;
+}
+
+interface CourseLessonWithNotes {
+  id: string;
+  title: string;
+  order_index: number;
+  notes: string;
+  journalEntries: { prompt: string; response: string; step_id: string }[];
+}
+
 interface Lesson {
   id: string; course_id: string; title: string;
   description?: string; xp_reward: number; quiz_question_count: number;
@@ -839,6 +854,12 @@ export default function LessonStepPlayerPage() {
   const [nextLesson, setNextLesson] = useState<{ id: string; title: string } | null>(null);
   const [resources, setResources] = useState<LessonResource[]>([]);
   const [showResources, setShowResources] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
+  const [activeNoteLesson, setActiveNoteLesson] = useState<string | null>(null);
+  const [courseLessonsWithNotes, setCourseLessonsWithNotes] = useState<CourseLessonWithNotes[]>([]);
+  const [currentNoteContent, setCurrentNoteContent] = useState("");
+  const [editingJournalEntry, setEditingJournalEntry] = useState<{ step_id: string; content: string } | null>(null);
+  const noteSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { loadData(); }, [lessonId]);
 
@@ -873,6 +894,39 @@ export default function LessonStepPlayerPage() {
     const { data: resData } = await supabase.from("lesson_resources").select("*").eq("lesson_id", lessonId).order("order_index");
     setResources((resData as LessonResource[]) ?? []);
 
+    // Load all lessons in course with their notes and journal entries for this child
+    if (lo && cr) {
+      const { data: allLessons } = await supabase
+        .from("lessons").select("id, title, order_index")
+        .eq("course_id", lo.course_id).order("order_index");
+
+      const lessonIds = (allLessons ?? []).map((l: { id: string }) => l.id);
+
+      const [{ data: allNotes }, { data: allJournals }] = await Promise.all([
+        supabase.from("lesson_notes").select("lesson_id, content").eq("child_id", cr.id).in("lesson_id", lessonIds),
+        supabase.from("journal_entries").select("lesson_id, step_id, prompt, response").eq("child_id", cr.id).in("lesson_id", lessonIds),
+      ]);
+
+      const notesMap: Record<string, string> = {};
+      (allNotes ?? []).forEach((n: { lesson_id: string; content: string }) => { notesMap[n.lesson_id] = n.content; });
+
+      const journalMap: Record<string, { prompt: string; response: string; step_id: string }[]> = {};
+      (allJournals ?? []).forEach((j: { lesson_id: string; step_id: string; prompt: string; response: string }) => {
+        if (!journalMap[j.lesson_id]) journalMap[j.lesson_id] = [];
+        journalMap[j.lesson_id].push({ prompt: j.prompt, response: j.response, step_id: j.step_id });
+      });
+
+      const withNotes: CourseLessonWithNotes[] = (allLessons ?? []).map((l: { id: string; title: string; order_index: number }) => ({
+        id: l.id, title: l.title, order_index: l.order_index,
+        notes: notesMap[l.id] ?? "",
+        journalEntries: journalMap[l.id] ?? [],
+      }));
+
+      setCourseLessonsWithNotes(withNotes);
+      setCurrentNoteContent(notesMap[lessonId] ?? "");
+      setActiveNoteLesson(lessonId);
+    }
+
     if (lo) {
       const { data: nd } = await supabase.from("lessons").select("id, title").eq("course_id", lo.course_id).eq("is_published", true).gt("order_index", lo.order_index).order("order_index").limit(1).maybeSingle();
       setNextLesson(nd as { id: string; title: string } ?? null);
@@ -899,6 +953,39 @@ export default function LessonStepPlayerPage() {
       { onConflict: "child_id,lesson_id" }
     );
   }, [currentIdx, childId]);
+
+  async function saveNote(lessonIdToSave: string, noteContent: string) {
+    if (!childId) return;
+    await supabase.from("lesson_notes").upsert({
+      child_id: childId, lesson_id: lessonIdToSave,
+      course_id: lesson?.course_id, content: noteContent,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "child_id,lesson_id" });
+    // Update local state
+    setCourseLessonsWithNotes(prev => prev.map(l =>
+      l.id === lessonIdToSave ? { ...l, notes: noteContent } : l
+    ));
+  }
+
+  function handleNoteChange(val: string) {
+    setCurrentNoteContent(val);
+    if (noteSaveTimer.current) clearTimeout(noteSaveTimer.current);
+    noteSaveTimer.current = setTimeout(() => saveNote(lessonId, val), 800);
+  }
+
+  async function saveJournalEdit(stepId: string, newResponse: string) {
+    if (!childId) return;
+    await supabase.from("journal_entries").update({
+      response: newResponse, updated_at: new Date().toISOString()
+    }).eq("child_id", childId).eq("step_id", stepId);
+    setCourseLessonsWithNotes(prev => prev.map(l => ({
+      ...l,
+      journalEntries: l.journalEntries.map(j =>
+        j.step_id === stepId ? { ...j, response: newResponse } : j
+      )
+    })));
+    setEditingJournalEntry(null);
+  }
 
   async function finishLesson() {
     if (!childId || !lesson) return;
@@ -1001,6 +1088,113 @@ export default function LessonStepPlayerPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Notes tab */}
+      {childId && courseLessonsWithNotes.length > 0 && (
+        <div>
+          <button onClick={() => setShowNotes(n => !n)}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+              showNotes ? "bg-amber-500 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+            }`}>
+            📓 My Notes {showNotes ? "▲" : "▼"}
+          </button>
+          {showNotes && (
+            <div className="mt-2 rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+              {/* Lesson tabs */}
+              <div className="flex overflow-x-auto border-b border-slate-100 bg-slate-50 gap-0.5 p-1">
+                {courseLessonsWithNotes.map((l, i) => (
+                  <button key={l.id}
+                    onClick={() => {
+                      setActiveNoteLesson(l.id);
+                      if (l.id === lessonId) setCurrentNoteContent(l.notes);
+                    }}
+                    className={`shrink-0 rounded-lg px-3 py-2 text-xs font-bold transition whitespace-nowrap ${
+                      activeNoteLesson === l.id
+                        ? l.id === lessonId ? "bg-amber-500 text-white" : "bg-violet-600 text-white"
+                        : "text-slate-600 hover:bg-slate-200"
+                    }`}>
+                    {i + 1}. {l.title.length > 20 ? l.title.slice(0, 20) + "…" : l.title}
+                    {l.id === lessonId && <span className="ml-1 text-[10px] opacity-75">(current)</span>}
+                  </button>
+                ))}
+              </div>
+
+              {/* Active lesson notes */}
+              {courseLessonsWithNotes.filter(l => l.id === activeNoteLesson).map(l => (
+                <div key={l.id} className="p-4 space-y-4">
+                  {/* Free-form notes */}
+                  <div>
+                    <p className="text-xs font-black text-slate-500 uppercase tracking-wide mb-2">✏️ My Notes</p>
+                    {l.id === lessonId ? (
+                      <textarea
+                        value={currentNoteContent}
+                        onChange={e => handleNoteChange(e.target.value)}
+                        rows={4}
+                        placeholder="Jot down anything you want to remember from this lesson..."
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-100 transition resize-none"
+                      />
+                    ) : (
+                      l.notes ? (
+                        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700 whitespace-pre-wrap leading-relaxed">
+                          {l.notes}
+                        </div>
+                      ) : (
+                        <p className="text-xs font-semibold text-slate-400 italic">No notes for this lesson yet.</p>
+                      )
+                    )}
+                  </div>
+
+                  {/* Journal prompt responses */}
+                  {l.journalEntries.length > 0 && (
+                    <div className="space-y-3">
+                      <p className="text-xs font-black text-slate-500 uppercase tracking-wide">📓 Journal Responses</p>
+                      {l.journalEntries.map(j => (
+                        <div key={j.step_id} className="rounded-xl border border-yellow-100 bg-yellow-50 p-3 space-y-2">
+                          {j.prompt && (
+                            <p className="text-xs font-bold text-yellow-800">Prompt: {j.prompt}</p>
+                          )}
+                          {editingJournalEntry?.step_id === j.step_id ? (
+                            <div className="space-y-2">
+                              <textarea
+                                value={editingJournalEntry.content}
+                                onChange={e => setEditingJournalEntry({ step_id: j.step_id, content: e.target.value })}
+                                rows={3}
+                                className="w-full rounded-xl border border-yellow-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-amber-400 resize-none"
+                              />
+                              <div className="flex gap-2">
+                                <button onClick={() => saveJournalEdit(j.step_id, editingJournalEntry.content)}
+                                  className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600 transition">
+                                  Save
+                                </button>
+                                <button onClick={() => setEditingJournalEntry(null)}
+                                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition">
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-start gap-2">
+                              <p className="flex-1 text-sm font-semibold text-slate-700 leading-relaxed whitespace-pre-wrap">{j.response}</p>
+                              <button onClick={() => setEditingJournalEntry({ step_id: j.step_id, content: j.response })}
+                                className="shrink-0 rounded-lg border border-yellow-200 px-2 py-1 text-xs font-bold text-yellow-700 hover:bg-yellow-100 transition">
+                                Edit
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {l.notes === "" && l.journalEntries.length === 0 && l.id !== lessonId && (
+                    <p className="text-xs font-semibold text-slate-400 italic text-center py-4">No notes or journal entries for this lesson yet.</p>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
