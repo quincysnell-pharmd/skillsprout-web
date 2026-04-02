@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
 
 // ── Types ─────────────────────────────────────────────────────
-type StepType = "text"|"video"|"pdf"|"image"|"audio"|"quiz"|"poll"|"matching"|"checklist"|"reflection"|"interactive"|"portfolio"|"journal"|"table"|"worksheet";
+type StepType = "text"|"video"|"pdf"|"image"|"audio"|"quiz"|"poll"|"matching"|"checklist"|"reflection"|"interactive"|"portfolio"|"journal"|"table"|"worksheet"|"portfolio_start"|"portfolio_rebalance"|"portfolio_view";
 
 interface Step {
   id: string;
@@ -42,7 +42,10 @@ const STEP_TYPES: { type: StepType; icon: string; label: string; color: string }
   { type: "portfolio",   icon: "📈", label: "Portfolio",      color: "bg-green-50 border-green-200 text-green-700"    },
   { type: "journal",     icon: "✏️", label: "Journal Prompt", color: "bg-yellow-50 border-yellow-200 text-yellow-700"  },
   { type: "table",       icon: "📋", label: "Table",           color: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-  { type: "worksheet",   icon: "📊", label: "Worksheet",       color: "bg-blue-50 border-blue-200 text-blue-700"           },
+  { type: "worksheet",       icon: "📊", label: "Worksheet",          color: "bg-blue-50 border-blue-200 text-blue-700"             },
+  { type: "portfolio_start",    icon: "💰", label: "Portfolio: Start",    color: "bg-emerald-50 border-emerald-200 text-emerald-700"    },
+  { type: "portfolio_rebalance",icon: "⚖️", label: "Portfolio: Rebalance",color: "bg-teal-50 border-teal-200 text-teal-700"             },
+  { type: "portfolio_view",     icon: "📈", label: "Portfolio: View",     color: "bg-green-50 border-green-200 text-green-700"          },
 ];
 
 const inputCls = "w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100 transition";
@@ -538,6 +541,45 @@ function StepForm({ step, onSave, onCancel, lessonId }: {
               <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
                 <p className="text-xs font-bold text-blue-800">📊 Students will see this worksheet embedded in the lesson. Their responses are automatically saved to Supabase and will be there when they return on any device.</p>
               </div>
+            </div>
+          )}
+
+          {/* PORTFOLIO START */}
+          {step.type === "portfolio_start" && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+              <div className="text-3xl">💰</div>
+              <p className="text-sm font-bold text-emerald-800">Portfolio: Start Step</p>
+              <p className="text-xs font-semibold text-emerald-700">Students will receive $10,000 to invest. They pick companies from a suggested list or enter their own ticker symbols.</p>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1.5">Instructions <span className="text-slate-400">(optional)</span></label>
+                <textarea className={textareaCls} rows={2} value={form.content ?? ""}
+                  onChange={e => set("content", e.target.value)}
+                  placeholder="e.g. You have $10,000 to invest. Choose 3-5 companies you believe in and allocate your budget." />
+              </div>
+            </div>
+          )}
+
+          {/* PORTFOLIO REBALANCE */}
+          {step.type === "portfolio_rebalance" && (
+            <div className="rounded-xl border border-teal-200 bg-teal-50 p-4 space-y-3">
+              <div className="text-3xl">⚖️</div>
+              <p className="text-sm font-bold text-teal-800">Portfolio: Rebalance Step</p>
+              <p className="text-xs font-semibold text-teal-700">Students can sell any of their current holdings and reinvest the proceeds into new or existing positions.</p>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1.5">Instructions <span className="text-slate-400">(optional)</span></label>
+                <textarea className={textareaCls} rows={2} value={form.content ?? ""}
+                  onChange={e => set("content", e.target.value)}
+                  placeholder="e.g. Now that you've learned about revenue models, would you change any of your investments?" />
+              </div>
+            </div>
+          )}
+
+          {/* PORTFOLIO VIEW */}
+          {step.type === "portfolio_view" && (
+            <div className="rounded-xl border border-green-200 bg-green-50 p-4 space-y-2">
+              <div className="text-3xl">📈</div>
+              <p className="text-sm font-bold text-green-800">Portfolio: View Step</p>
+              <p className="text-xs font-semibold text-green-700">Shows students their current portfolio performance with live prices. Read-only — no buying or selling.</p>
             </div>
           )}
 

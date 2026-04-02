@@ -7,7 +7,7 @@ import { AddToPortfolioForm, PortfolioAddedBanner } from "@/components/portfolio
 import { CommunityPostForm, PostSubmittedBanner } from "@/components/community/CommunityPostForm";
 
 // ── Types ─────────────────────────────────────────────────────
-type StepType = "text"|"video"|"pdf"|"image"|"audio"|"quiz"|"poll"|"matching"|"checklist"|"reflection"|"interactive"|"portfolio"|"journal"|"table"|"worksheet";
+type StepType = "text"|"video"|"pdf"|"image"|"audio"|"quiz"|"poll"|"matching"|"checklist"|"reflection"|"interactive"|"portfolio"|"journal"|"table"|"worksheet"|"portfolio_start"|"portfolio_rebalance"|"portfolio_view";
 
 interface Step {
   id: string;
@@ -627,6 +627,593 @@ function WorksheetStep({ step, childId, lessonId, courseId, onComplete, isComple
   );
 }
 
+// ── Portfolio helpers ────────────────────────────────────────
+const FINNHUB_KEY = process.env.NEXT_PUBLIC_FINNHUB_API_KEY;
+
+async function fetchLivePrice(ticker: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${ticker.toUpperCase()}&token=${FINNHUB_KEY}`);
+    const data = await res.json();
+    return data.c > 0 ? data.c : null;
+  } catch { return null; }
+}
+
+interface Holding {
+  id: string;
+  ticker: string;
+  company_name: string;
+  shares: number;
+  allocated_cents: number;
+  price_when_added: number;
+  is_active: boolean;
+  currentPrice?: number;
+}
+
+interface Budget {
+  id: string;
+  starting_amount: number;
+  cash_remaining: number;
+}
+
+// ── Portfolio Start Step ──────────────────────────────────────
+function PortfolioStartStep({ step, childId, courseId, onComplete, isCompleted }: {
+  step: Step; childId: string; courseId: string; onComplete: () => void; isCompleted: boolean;
+}) {
+  const supabase = supabaseBrowser();
+  const [budget, setBudget] = useState<Budget | null>(null);
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [ticker, setTicker] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [dollarAmount, setDollarAmount] = useState("");
+  const [livePrice, setLivePrice] = useState<number | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const SUGGESTED = [
+    { ticker: "AAPL", name: "Apple" }, { ticker: "MSFT", name: "Microsoft" },
+    { ticker: "AMZN", name: "Amazon" }, { ticker: "TSLA", name: "Tesla" },
+    { ticker: "GOOGL", name: "Alphabet" }, { ticker: "NKE", name: "Nike" },
+    { ticker: "DIS", name: "Disney" }, { ticker: "SBUX", name: "Starbucks" },
+    { ticker: "MCD", name: "McDonald's" }, { ticker: "NFLX", name: "Netflix" },
+  ];
+
+  useEffect(() => { load(); }, [childId, courseId]);
+
+  async function load() {
+    setLoading(true);
+    const { data: b } = await supabase.from("portfolio_budgets").select("*").eq("child_id", childId).eq("course_id", courseId).maybeSingle();
+    const { data: h } = await supabase.from("portfolio_holdings").select("*").eq("child_id", childId).eq("course_id", courseId).eq("is_active", true);
+    setBudget(b as Budget ?? null);
+    setHoldings((h as Holding[]) ?? []);
+    setLoading(false);
+  }
+
+  async function initBudget() {
+    setBusy(true);
+    const { data } = await supabase.from("portfolio_budgets").insert({
+      child_id: childId, course_id: courseId,
+      starting_amount: 1000000, cash_remaining: 1000000,
+    }).select().maybeSingle();
+    setBudget(data as Budget);
+    setBusy(false);
+  }
+
+  async function lookupPrice() {
+    if (!ticker.trim()) return;
+    setLookingUp(true); setError(""); setLivePrice(null);
+    const price = await fetchLivePrice(ticker);
+    if (!price) { setError("Couldn't find that ticker. Check the symbol and try again."); }
+    else { setLivePrice(price); }
+    setLookingUp(false);
+  }
+
+  async function buy() {
+    if (!budget || !livePrice || !ticker || !dollarAmount || !companyName) { setError("Please fill in all fields and look up the price first."); return; }
+    const dollars = parseFloat(dollarAmount);
+    if (isNaN(dollars) || dollars <= 0) { setError("Enter a valid dollar amount."); return; }
+    const cents = Math.round(dollars * 100);
+    if (cents > budget.cash_remaining) { setError(`Not enough cash. You have $${(budget.cash_remaining/100).toFixed(2)} remaining.`); return; }
+    const shares = dollars / livePrice;
+    setBusy(true);
+    // Insert holding
+    await supabase.from("portfolio_holdings").insert({
+      child_id: childId, course_id: courseId, ticker: ticker.toUpperCase(),
+      company_name: companyName, shares, allocated_cents: cents,
+      price_when_added: livePrice, is_active: true,
+    });
+    // Log transaction
+    await supabase.from("portfolio_transactions").insert({
+      child_id: childId, course_id: courseId, ticker: ticker.toUpperCase(),
+      company_name: companyName, action: "buy", shares,
+      price_per_share: livePrice, total_cents: cents, step_id: step.id,
+    });
+    // Update budget
+    const newCash = budget.cash_remaining - cents;
+    await supabase.from("portfolio_budgets").update({ cash_remaining: newCash, updated_at: new Date().toISOString() }).eq("id", budget.id);
+    setTicker(""); setCompanyName(""); setDollarAmount(""); setLivePrice(null);
+    await load();
+    setBusy(false);
+  }
+
+  const totalAllocated = holdings.reduce((s, h) => s + h.allocated_cents, 0);
+  const cashPct = budget ? Math.round((budget.cash_remaining / budget.starting_amount) * 100) : 0;
+
+  if (loading) return <div className="text-center py-8"><div className="text-3xl animate-bounce">📈</div></div>;
+
+  return (
+    <div className="space-y-5">
+      {step.content && <p className="font-bold text-slate-900">{step.content}</p>}
+
+      {!budget ? (
+        <div className="rounded-2xl border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 to-teal-50 p-8 text-center space-y-4">
+          <div className="text-5xl">💰</div>
+          <h3 className="font-display text-2xl font-black text-emerald-900">Your $10,000 Portfolio</h3>
+          <p className="text-sm font-semibold text-emerald-700">You have $10,000 of hypothetical money to invest. Choose wisely — you'll track these investments throughout the course!</p>
+          <button onClick={initBudget} disabled={busy}
+            className="rounded-xl bg-emerald-600 px-8 py-3 font-bold text-white hover:bg-emerald-700 disabled:opacity-40 transition">
+            {busy ? "Setting up..." : "Start My Portfolio →"}
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Budget bar */}
+          <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-black text-slate-700">Portfolio Budget</span>
+              <span className="text-sm font-bold text-emerald-700">${(budget.cash_remaining/100).toFixed(2)} cash remaining</span>
+            </div>
+            <div className="h-3 rounded-full bg-slate-100 overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-400 transition-all"
+                style={{ width: `${100 - cashPct}%` }} />
+            </div>
+            <div className="flex justify-between text-xs font-semibold text-slate-400">
+              <span>Invested: ${(totalAllocated/100).toFixed(2)}</span>
+              <span>Total: $10,000.00</span>
+            </div>
+          </div>
+
+          {/* Current holdings */}
+          {holdings.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-black text-slate-500 uppercase tracking-wide">Your Holdings</p>
+              {holdings.map(h => (
+                <div key={h.id} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 font-black text-emerald-700 text-xs">{h.ticker}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-slate-800 text-sm">{h.company_name}</div>
+                    <div className="text-xs font-semibold text-slate-400">{h.shares.toFixed(4)} shares @ ${h.price_when_added.toFixed(2)}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-black text-slate-700">${(h.allocated_cents/100).toFixed(2)}</div>
+                    <div className="text-xs font-semibold text-slate-400">allocated</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add holding form */}
+          {budget.cash_remaining > 0 && (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+              <p className="text-xs font-black text-slate-500 uppercase tracking-wide">Add a Company</p>
+              {error && <p className="text-xs font-bold text-rose-600">{error}</p>}
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Company Name</label>
+                <div className="flex gap-2 flex-wrap mb-2">
+                  {SUGGESTED.map(s => (
+                    <button key={s.ticker} onClick={() => { setTicker(s.ticker); setCompanyName(s.name); setLivePrice(null); }}
+                      className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${ticker === s.ticker ? "bg-emerald-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"}`}>
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+                <input value={companyName} onChange={e => setCompanyName(e.target.value)}
+                  placeholder="Or type a company name..."
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-emerald-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Ticker Symbol</label>
+                <div className="flex gap-2">
+                  <input value={ticker} onChange={e => { setTicker(e.target.value.toUpperCase()); setLivePrice(null); }}
+                    placeholder="e.g. AAPL"
+                    className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-emerald-400 uppercase" />
+                  <button onClick={lookupPrice} disabled={lookingUp || !ticker}
+                    className="rounded-xl bg-slate-700 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-40 transition">
+                    {lookingUp ? "..." : "Look Up"}
+                  </button>
+                </div>
+                {livePrice && <p className="text-xs font-bold text-emerald-600 mt-1">Current price: ${livePrice.toFixed(2)}</p>}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Amount to Invest ($)</label>
+                <input value={dollarAmount} onChange={e => setDollarAmount(e.target.value)} type="number" min="1"
+                  placeholder={`Max $${(budget.cash_remaining/100).toFixed(2)}`}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-emerald-400" />
+                {livePrice && dollarAmount && !isNaN(parseFloat(dollarAmount)) && (
+                  <p className="text-xs font-semibold text-slate-400 mt-1">
+                    ≈ {(parseFloat(dollarAmount) / livePrice).toFixed(4)} shares
+                  </p>
+                )}
+              </div>
+              <button onClick={buy} disabled={busy || !livePrice || !ticker || !dollarAmount || !companyName}
+                className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-40 transition">
+                {busy ? "Buying..." : "Buy →"}
+              </button>
+            </div>
+          )}
+
+          {/* Complete step */}
+          {holdings.length > 0 && !isCompleted && (
+            <button onClick={onComplete}
+              className="w-full rounded-xl bg-violet-600 py-3 text-sm font-bold text-white hover:bg-violet-700 transition">
+              ✅ Portfolio Started — Continue
+            </button>
+          )}
+          {isCompleted && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 text-center">
+              ✅ Portfolio started! You can still add companies until your cash runs out.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Portfolio Rebalance Step ──────────────────────────────────
+function PortfolioRebalanceStep({ step, childId, courseId, onComplete, isCompleted }: {
+  step: Step; childId: string; courseId: string; onComplete: () => void; isCompleted: boolean;
+}) {
+  const supabase = supabaseBrowser();
+  const [budget, setBudget] = useState<Budget | null>(null);
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [prices, setPrices] = useState<Record<string, number>>({});
+  const [selling, setSelling] = useState<string | null>(null);
+  const [buyTicker, setBuyTicker] = useState("");
+  const [buyName, setBuyName] = useState("");
+  const [buyAmount, setBuyAmount] = useState("");
+  const [buyPrice, setBuyPrice] = useState<number | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const SUGGESTED = [
+    { ticker: "AAPL", name: "Apple" }, { ticker: "MSFT", name: "Microsoft" },
+    { ticker: "AMZN", name: "Amazon" }, { ticker: "TSLA", name: "Tesla" },
+    { ticker: "GOOGL", name: "Alphabet" }, { ticker: "NKE", name: "Nike" },
+    { ticker: "DIS", name: "Disney" }, { ticker: "SBUX", name: "Starbucks" },
+    { ticker: "MCD", name: "McDonald's" }, { ticker: "NFLX", name: "Netflix" },
+  ];
+
+  useEffect(() => { load(); }, [childId, courseId]);
+
+  async function load() {
+    setLoading(true);
+    const { data: b } = await supabase.from("portfolio_budgets").select("*").eq("child_id", childId).eq("course_id", courseId).maybeSingle();
+    const { data: h } = await supabase.from("portfolio_holdings").select("*").eq("child_id", childId).eq("course_id", courseId).eq("is_active", true);
+    setBudget(b as Budget ?? null);
+    const hs = (h as Holding[]) ?? [];
+    setHoldings(hs);
+    // Fetch live prices for all holdings
+    const priceMap: Record<string, number> = {};
+    await Promise.all(hs.map(async hold => {
+      const p = await fetchLivePrice(hold.ticker);
+      if (p) priceMap[hold.ticker] = p;
+    }));
+    setPrices(priceMap);
+    setLoading(false);
+  }
+
+  async function sell(holding: Holding) {
+    if (!budget) return;
+    const currentPrice = prices[holding.ticker] ?? holding.price_when_added;
+    const currentValue = Math.round(holding.shares * currentPrice * 100);
+    setBusy(true);
+    // Mark holding inactive
+    await supabase.from("portfolio_holdings").update({ is_active: false }).eq("id", holding.id);
+    // Log transaction
+    await supabase.from("portfolio_transactions").insert({
+      child_id: childId, course_id: courseId, ticker: holding.ticker,
+      company_name: holding.company_name, action: "sell", shares: holding.shares,
+      price_per_share: currentPrice, total_cents: currentValue, step_id: step.id,
+    });
+    // Return proceeds to cash
+    const newCash = budget.cash_remaining + currentValue;
+    await supabase.from("portfolio_budgets").update({ cash_remaining: newCash, updated_at: new Date().toISOString() }).eq("id", budget.id);
+    setSelling(null);
+    await load();
+    setBusy(false);
+  }
+
+  async function lookupBuyPrice() {
+    if (!buyTicker.trim()) return;
+    setLookingUp(true); setBuyPrice(null);
+    const p = await fetchLivePrice(buyTicker);
+    if (!p) setError("Couldn't find that ticker.");
+    else setBuyPrice(p);
+    setLookingUp(false);
+  }
+
+  async function buy() {
+    if (!budget || !buyPrice || !buyTicker || !buyAmount || !buyName) { setError("Please fill in all fields."); return; }
+    const dollars = parseFloat(buyAmount);
+    const cents = Math.round(dollars * 100);
+    if (cents > budget.cash_remaining) { setError(`Not enough cash. You have $${(budget.cash_remaining/100).toFixed(2)}.`); return; }
+    const shares = dollars / buyPrice;
+    setBusy(true);
+    // Check if already holding
+    const existing = holdings.find(h => h.ticker === buyTicker.toUpperCase());
+    if (existing) {
+      await supabase.from("portfolio_holdings").update({
+        shares: existing.shares + shares,
+        allocated_cents: existing.allocated_cents + cents,
+      }).eq("id", existing.id);
+    } else {
+      await supabase.from("portfolio_holdings").insert({
+        child_id: childId, course_id: courseId, ticker: buyTicker.toUpperCase(),
+        company_name: buyName, shares, allocated_cents: cents,
+        price_when_added: buyPrice, is_active: true,
+      });
+    }
+    await supabase.from("portfolio_transactions").insert({
+      child_id: childId, course_id: courseId, ticker: buyTicker.toUpperCase(),
+      company_name: buyName, action: "buy", shares, price_per_share: buyPrice,
+      total_cents: cents, step_id: step.id,
+    });
+    const newCash = budget.cash_remaining - cents;
+    await supabase.from("portfolio_budgets").update({ cash_remaining: newCash, updated_at: new Date().toISOString() }).eq("id", budget.id);
+    setBuyTicker(""); setBuyName(""); setBuyAmount(""); setBuyPrice(null); setError("");
+    await load();
+    setBusy(false);
+  }
+
+  if (loading) return <div className="text-center py-8"><div className="text-3xl animate-bounce">📈</div></div>;
+  if (!budget) return <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">⚠️ You need to start your portfolio first in an earlier lesson step.</div>;
+
+  return (
+    <div className="space-y-4">
+      {step.content && <p className="font-bold text-slate-900">{step.content}</p>}
+      <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+        <p className="text-xs font-bold text-blue-800">⚖️ Rebalance time! You can sell any of your current holdings and use the proceeds to buy new ones.</p>
+      </div>
+
+      {/* Cash available */}
+      <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+        <span className="text-sm font-bold text-emerald-800">Cash available</span>
+        <span className="text-lg font-black text-emerald-700">${(budget.cash_remaining/100).toFixed(2)}</span>
+      </div>
+
+      {/* Current holdings to sell */}
+      {holdings.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-black text-slate-500 uppercase tracking-wide">Your Holdings</p>
+          {holdings.map(h => {
+            const currentPrice = prices[h.ticker] ?? h.price_when_added;
+            const currentValue = h.shares * currentPrice;
+            const gainLoss = currentValue - (h.allocated_cents / 100);
+            const gainLossPct = ((gainLoss / (h.allocated_cents / 100)) * 100).toFixed(1);
+            return (
+              <div key={h.id} className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 font-black text-emerald-700 text-xs">{h.ticker}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-slate-800 text-sm">{h.company_name}</div>
+                    <div className="text-xs font-semibold text-slate-400">{h.shares.toFixed(4)} shares</div>
+                  </div>
+                  <div className="text-right mr-2">
+                    <div className="text-sm font-black text-slate-700">${currentValue.toFixed(2)}</div>
+                    <div className={`text-xs font-bold ${gainLoss >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {gainLoss >= 0 ? "+" : ""}{gainLossPct}%
+                    </div>
+                  </div>
+                  {selling === h.id ? (
+                    <div className="flex gap-1">
+                      <button onClick={() => sell(h)} disabled={busy}
+                        className="rounded-lg bg-rose-500 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-rose-600 disabled:opacity-40">
+                        Confirm
+                      </button>
+                      <button onClick={() => setSelling(null)}
+                        className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setSelling(h.id)}
+                      className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-100 transition">
+                      Sell
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Buy form */}
+      {budget.cash_remaining > 0 && (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <p className="text-xs font-black text-slate-500 uppercase tracking-wide">Buy a Company</p>
+          {error && <p className="text-xs font-bold text-rose-600">{error}</p>}
+          <div className="flex gap-2 flex-wrap">
+            {SUGGESTED.filter(s => !holdings.find(h => h.ticker === s.ticker)).map(s => (
+              <button key={s.ticker} onClick={() => { setBuyTicker(s.ticker); setBuyName(s.name); setBuyPrice(null); }}
+                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${buyTicker === s.ticker ? "bg-emerald-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"}`}>
+                {s.name}
+              </button>
+            ))}
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Company Name</label>
+            <input value={buyName} onChange={e => setBuyName(e.target.value)} placeholder="Company name"
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-emerald-400" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Ticker Symbol</label>
+            <div className="flex gap-2">
+              <input value={buyTicker} onChange={e => { setBuyTicker(e.target.value.toUpperCase()); setBuyPrice(null); }} placeholder="e.g. AAPL"
+                className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-emerald-400 uppercase" />
+              <button onClick={lookupBuyPrice} disabled={lookingUp || !buyTicker}
+                className="rounded-xl bg-slate-700 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-40 transition">
+                {lookingUp ? "..." : "Look Up"}
+              </button>
+            </div>
+            {buyPrice && <p className="text-xs font-bold text-emerald-600 mt-1">Current price: ${buyPrice.toFixed(2)}</p>}
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Amount to Invest ($)</label>
+            <input value={buyAmount} onChange={e => setBuyAmount(e.target.value)} type="number" min="1"
+              placeholder={`Max $${(budget.cash_remaining/100).toFixed(2)}`}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-emerald-400" />
+          </div>
+          <button onClick={buy} disabled={busy || !buyPrice || !buyTicker || !buyAmount || !buyName}
+            className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-40 transition">
+            {busy ? "Buying..." : "Buy →"}
+          </button>
+        </div>
+      )}
+
+      {!isCompleted && (
+        <button onClick={onComplete}
+          className="w-full rounded-xl bg-violet-600 py-3 text-sm font-bold text-white hover:bg-violet-700 transition">
+          ✅ Done Rebalancing — Continue
+        </button>
+      )}
+      {isCompleted && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 text-center">
+          ✅ Rebalance complete!
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Portfolio View Step ───────────────────────────────────────
+function PortfolioViewStep({ childId, courseId }: { childId: string; courseId: string }) {
+  const supabase = supabaseBrowser();
+  const [budget, setBudget] = useState<Budget | null>(null);
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [prices, setPrices] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => { load(); }, [childId, courseId]);
+
+  async function load(isRefresh = false) {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
+    const { data: b } = await supabase.from("portfolio_budgets").select("*").eq("child_id", childId).eq("course_id", courseId).maybeSingle();
+    const { data: h } = await supabase.from("portfolio_holdings").select("*").eq("child_id", childId).eq("course_id", courseId).eq("is_active", true);
+    setBudget(b as Budget ?? null);
+    const hs = (h as Holding[]) ?? [];
+    setHoldings(hs);
+    const priceMap: Record<string, number> = {};
+    await Promise.all(hs.map(async hold => {
+      const p = await fetchLivePrice(hold.ticker);
+      if (p) priceMap[hold.ticker] = p;
+    }));
+    setPrices(priceMap);
+    if (isRefresh) setRefreshing(false); else setLoading(false);
+  }
+
+  if (loading) return <div className="text-center py-8"><div className="text-3xl animate-bounce">📈</div></div>;
+  if (!budget) return <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">⚠️ No portfolio found for this course yet.</div>;
+
+  const totalCurrentValue = holdings.reduce((s, h) => s + (h.shares * (prices[h.ticker] ?? h.price_when_added)), 0);
+  const totalInvested = holdings.reduce((s, h) => s + (h.allocated_cents / 100), 0);
+  const cashRemaining = budget.cash_remaining / 100;
+  const totalPortfolioValue = totalCurrentValue + cashRemaining;
+  const totalGainLoss = totalPortfolioValue - (budget.starting_amount / 100);
+  const totalGainLossPct = ((totalGainLoss / (budget.starting_amount / 100)) * 100).toFixed(2);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-black text-slate-500 uppercase tracking-wide">📊 Portfolio Performance</p>
+        <button onClick={() => load(true)} disabled={refreshing}
+          className="text-xs font-bold text-slate-500 hover:text-slate-700 transition">
+          {refreshing ? "Refreshing..." : "↻ Refresh prices"}
+        </button>
+      </div>
+
+      {/* Summary card */}
+      <div className={`rounded-2xl border-2 p-5 space-y-3 ${totalGainLoss >= 0 ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold text-slate-500">Total Portfolio Value</p>
+            <p className="text-3xl font-black text-slate-900">${totalPortfolioValue.toFixed(2)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs font-bold text-slate-500">Overall Return</p>
+            <p className={`text-2xl font-black ${totalGainLoss >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+              {totalGainLoss >= 0 ? "+" : ""}{totalGainLossPct}%
+            </p>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3 pt-2 border-t border-white/50">
+          <div className="text-center">
+            <p className="text-xs font-semibold text-slate-500">Started With</p>
+            <p className="text-sm font-black text-slate-700">${(budget.starting_amount/100).toFixed(0)}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-xs font-semibold text-slate-500">Invested</p>
+            <p className="text-sm font-black text-slate-700">${totalInvested.toFixed(2)}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-xs font-semibold text-slate-500">Cash</p>
+            <p className="text-sm font-black text-slate-700">${cashRemaining.toFixed(2)}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Individual holdings */}
+      {holdings.length > 0 && (
+        <div className="space-y-2">
+          {holdings.map(h => {
+            const currentPrice = prices[h.ticker] ?? h.price_when_added;
+            const currentValue = h.shares * currentPrice;
+            const gainLoss = currentValue - (h.allocated_cents / 100);
+            const gainLossPct = ((gainLoss / (h.allocated_cents / 100)) * 100).toFixed(1);
+            const pctOfPortfolio = ((currentValue / totalPortfolioValue) * 100).toFixed(1);
+            return (
+              <div key={h.id} className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 font-black text-slate-700 text-xs">{h.ticker}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-slate-800 text-sm">{h.company_name}</div>
+                    <div className="text-xs font-semibold text-slate-400">
+                      {h.shares.toFixed(4)} shares · {pctOfPortfolio}% of portfolio
+                    </div>
+                    <div className="mt-1.5 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-emerald-400" style={{ width: `${pctOfPortfolio}%` }} />
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-sm font-black text-slate-700">${currentValue.toFixed(2)}</div>
+                    <div className={`text-xs font-bold ${gainLoss >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {gainLoss >= 0 ? "+" : ""}${gainLoss.toFixed(2)} ({gainLoss >= 0 ? "+" : ""}{gainLossPct}%)
+                    </div>
+                    <div className="text-xs font-semibold text-slate-400">${currentPrice.toFixed(2)}/share</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {holdings.length === 0 && (
+        <div className="rounded-xl border border-slate-100 bg-white p-8 text-center">
+          <p className="font-bold text-slate-400">No holdings yet.</p>
+          <p className="text-xs font-semibold text-slate-400 mt-1">Complete the portfolio step earlier in this lesson to start investing.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Research Assistant ───────────────────────────────────────
 function ResearchAssistant({ lessonTitle, courseId }: { lessonTitle: string; courseId: string }) {
   const [open, setOpen] = useState(false);
@@ -946,7 +1533,24 @@ function StepContent({ step, childId, courseId, lessonId, onComplete, isComplete
         <WorksheetStep step={step} childId={childId} lessonId={lessonId} courseId={courseId} onComplete={onComplete} isCompleted={isCompleted} />
       )}
 
-      {/* PORTFOLIO */}
+      {/* PORTFOLIO START */}
+      {step.type === "portfolio_start" && (
+        <PortfolioStartStep step={step} childId={childId} courseId={courseId} onComplete={onComplete} isCompleted={isCompleted} />
+      )}
+
+      {/* PORTFOLIO REBALANCE */}
+      {step.type === "portfolio_rebalance" && (
+        <PortfolioRebalanceStep step={step} childId={childId} courseId={courseId} onComplete={onComplete} isCompleted={isCompleted} />
+      )}
+
+      {/* PORTFOLIO VIEW */}
+      {step.type === "portfolio_view" && (
+        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <PortfolioViewStep childId={childId} courseId={courseId} />
+        </div>
+      )}
+
+      {/* PORTFOLIO (legacy) */}
       {step.type === "portfolio" && (
         <div className="rounded-2xl border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 to-teal-50 p-6 text-center space-y-4">
           <div className="text-4xl">📈</div>
@@ -1001,6 +1605,8 @@ export default function LessonStepPlayerPage() {
   const [resources, setResources] = useState<LessonResource[]>([]);
   const [showResources, setShowResources] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
+  const [showPortfolioTab, setShowPortfolioTab] = useState(false);
+  const [hasBudget, setHasBudget] = useState(false);
   const [activeNoteLesson, setActiveNoteLesson] = useState<string | null>(null);
   const [courseLessonsWithNotes, setCourseLessonsWithNotes] = useState<CourseLessonWithNotes[]>([]);
   const [currentNoteContent, setCurrentNoteContent] = useState("");
@@ -1039,6 +1645,13 @@ export default function LessonStepPlayerPage() {
     // Load resources
     const { data: resData } = await supabase.from("lesson_resources").select("*").eq("lesson_id", lessonId).order("order_index");
     setResources((resData as LessonResource[]) ?? []);
+
+    // Check if this course has a portfolio budget for this child
+    if (cr && lo) {
+      const { data: budgetCheck } = await supabase.from("portfolio_budgets")
+        .select("id").eq("child_id", cr.id).eq("course_id", lo.course_id).maybeSingle();
+      setHasBudget(!!budgetCheck);
+    }
 
     // Load all lessons in course with their notes and journal entries for this child
     if (lo && cr) {
@@ -1241,6 +1854,23 @@ export default function LessonStepPlayerPage() {
 
       {/* Research Assistant */}
       <ResearchAssistant lessonTitle={lesson.title} courseId={courseId} />
+
+      {/* Portfolio tab — only shows if this course has a budget */}
+      {hasBudget && childId && (
+        <div>
+          <button onClick={() => setShowPortfolioTab(p => !p)}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+              showPortfolioTab ? "bg-emerald-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+            }`}>
+            📈 My Portfolio {showPortfolioTab ? "▲" : "▼"}
+          </button>
+          {showPortfolioTab && (
+            <div className="mt-2 rounded-2xl border border-slate-100 bg-white shadow-sm p-4">
+              <PortfolioViewStep childId={childId} courseId={courseId} />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Notes tab */}
       {childId && courseLessonsWithNotes.length > 0 && (
