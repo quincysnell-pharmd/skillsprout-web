@@ -627,6 +627,152 @@ function WorksheetStep({ step, childId, lessonId, courseId, onComplete, isComple
   );
 }
 
+// ── Research Assistant ───────────────────────────────────────
+function ResearchAssistant({ lessonTitle, courseId }: { lessonTitle: string; courseId: string }) {
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const SYSTEM_PROMPT = `You are SkillSprout's research assistant for students. The student is currently in a lesson called "${lessonTitle}".
+
+YOUR ROLE: You are a data retrieval tool, not an analyst or tutor. Your job is to surface raw facts and data points relevant to what the student is learning so they can develop their own critical thinking skills. Adapt to the topic of the lesson — if it is about investing, focus on financial data. If it is about cooking, focus on culinary facts. If it is about coding, focus on technical facts. Always stay relevant to the lesson topic.
+
+STRICT RULES:
+1. ONLY provide raw facts, numbers, dates, statistics, and direct information from reliable sources relevant to the lesson topic. For business/investing lessons use annual reports, SEC filings, earnings releases, and financial databases. For other topics use reputable educational and reference sources.
+2. ALWAYS cite what type of source the information comes from (e.g., "From Netflix's 2023 Annual Report:" or "According to the USDA:" or "Based on published research:").
+3. When data may be outdated or you are uncertain, say so clearly and tell the student exactly where they can verify it.
+4. NEVER use evaluative language: do not say "great," "good," "bad," "impressive," "concerning," "suggests," "indicates," "means," "therefore," or any word that draws a conclusion for the student.
+5. NEVER complete assignments, write analyses, or answer "what does this mean?" or "is this good?" Instead respond: "That thinking is yours to do. What specific facts would help you work through it?"
+6. After providing data, always end with a Socratic question like "What does that tell you?" or "How does that compare to what you expected?" or "What else would you want to know?"
+7. If a student asks you to summarize, conclude, or analyze — decline and provide raw data only.
+8. Keep all language age-appropriate. Never discuss violence, adult content, politics, or anything unrelated to the educational topic of the lesson.
+9. If asked about something completely unrelated to the current lesson topic, say: "I can only help with research related to what you're learning in this lesson."
+10. If you are uncertain about a specific data point, say so clearly and direct the student to a specific reliable source where they can find it.`;
+
+  useEffect(() => {
+    if (open && bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, open]);
+
+  async function send() {
+    if (!input.trim() || loading) return;
+    const userMsg = input.trim();
+    setInput("");
+    setMessages(prev => [...prev, { role: "user", content: userMsg }]);
+    setLoading(true);
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          system: SYSTEM_PROMPT,
+          messages: [
+            ...messages.map(m => ({ role: m.role, content: m.content })),
+            { role: "user", content: userMsg }
+          ],
+        }),
+      });
+      const data = await response.json();
+      const reply = data.content?.[0]?.text ?? "Sorry, I couldn't get a response. Please try again.";
+      setMessages(prev => [...prev, { role: "assistant", content: reply }]);
+    } catch {
+      setMessages(prev => [...prev, { role: "assistant", content: "Something went wrong. Please try again." }]);
+    }
+    setLoading(false);
+  }
+
+  return (
+    <>
+      {/* Toggle button */}
+      <button onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+          open ? "bg-sky-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+        }`}>
+        🔍 Research Assistant {open ? "▲" : "▼"}
+      </button>
+
+      {open && (
+        <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3">
+            <h3 className="font-display font-bold text-white text-sm">🔍 Research Assistant</h3>
+            <p className="text-xs text-white/80 mt-0.5">Ask me to look up facts and data — the analysis is yours to make.</p>
+          </div>
+
+          {/* Messages */}
+          <div className="h-72 overflow-y-auto p-4 space-y-3 bg-slate-50">
+            {messages.length === 0 && (
+              <div className="text-center py-8 space-y-2">
+                <div className="text-3xl">🔍</div>
+                <p className="text-sm font-bold text-slate-500">Ask me to look up facts about a company</p>
+                <div className="space-y-1.5 mt-3">
+                  {[
+                    "What is Apple's revenue for 2023?",
+                    "How many subscribers does Netflix have?",
+                    "When was Amazon founded?",
+                  ].map(s => (
+                    <button key={s} onClick={() => setInput(s)}
+                      className="block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:border-sky-300 hover:text-sky-700 transition text-left">
+                      "{s}"
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {messages.map((m, i) => (
+              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm font-semibold leading-relaxed ${
+                  m.role === "user"
+                    ? "bg-sky-600 text-white rounded-br-sm"
+                    : "bg-white border border-slate-100 text-slate-700 rounded-bl-sm shadow-sm"
+                }`}>
+                  {m.content}
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="bg-white border border-slate-100 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
+                  <div className="flex gap-1">
+                    <div className="w-2 h-2 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <div className="w-2 h-2 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <div className="w-2 h-2 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Input */}
+          <div className="border-t border-slate-100 p-3 flex gap-2 bg-white">
+            <input
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+              placeholder="e.g. What was Tesla's revenue in 2023?"
+              className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100 transition"
+            />
+            <button onClick={send} disabled={!input.trim() || loading}
+              className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-bold text-white hover:bg-sky-700 disabled:opacity-40 transition">
+              →
+            </button>
+          </div>
+          <div className="px-4 py-2 bg-slate-50 border-t border-slate-100">
+            <p className="text-xs font-semibold text-slate-400">Data sourced from company filings and financial databases. Always verify current figures at the company's investor relations page.</p>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Step renderer ─────────────────────────────────────────────
 function StepContent({ step, childId, courseId, lessonId, onComplete, isCompleted }: {
   step: Step; childId: string; courseId: string; lessonId: string;
@@ -1092,6 +1238,9 @@ export default function LessonStepPlayerPage() {
           )}
         </div>
       )}
+
+      {/* Research Assistant */}
+      <ResearchAssistant lessonTitle={lesson.title} courseId={courseId} />
 
       {/* Notes tab */}
       {childId && courseLessonsWithNotes.length > 0 && (
