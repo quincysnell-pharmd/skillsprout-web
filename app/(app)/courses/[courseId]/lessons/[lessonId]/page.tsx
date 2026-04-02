@@ -1545,7 +1545,8 @@ function StepContent({ step, childId, courseId, lessonId, onComplete, isComplete
 
       {/* PORTFOLIO VIEW */}
       {step.type === "portfolio_view" && (
-        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-4">
+          {step.content && <p className="font-bold text-slate-900">{step.content}</p>}
           <PortfolioViewStep childId={childId} courseId={courseId} />
         </div>
       )}

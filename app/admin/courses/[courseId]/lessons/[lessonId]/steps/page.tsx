@@ -576,10 +576,16 @@ function StepForm({ step, onSave, onCancel, lessonId }: {
 
           {/* PORTFOLIO VIEW */}
           {step.type === "portfolio_view" && (
-            <div className="rounded-xl border border-green-200 bg-green-50 p-4 space-y-2">
+            <div className="rounded-xl border border-green-200 bg-green-50 p-4 space-y-3">
               <div className="text-3xl">📈</div>
               <p className="text-sm font-bold text-green-800">Portfolio: View Step</p>
               <p className="text-xs font-semibold text-green-700">Shows students their current portfolio performance with live prices. Read-only — no buying or selling.</p>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1.5">Instructions <span className="text-slate-400">(optional)</span></label>
+                <textarea className={textareaCls} rows={2} value={form.content ?? ""}
+                  onChange={e => set("content", e.target.value)}
+                  placeholder="e.g. Take a look at how your portfolio is performing. What do you notice?" />
+              </div>
             </div>
           )}
 
