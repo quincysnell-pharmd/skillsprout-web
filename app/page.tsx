@@ -132,7 +132,7 @@ export default function HomePage() {
       <section className="ss-stats-bar">
         <div className="mx-auto flex max-w-[1200px] flex-wrap justify-around gap-6">
           <StatItem num="50+" label="Skills to Explore" />
-          <StatItem num="4"   label="Skill Levels" />
+          <StatItem num="8"   label="Levels to Earn" />
           <StatItem num="365" label="Daily Challenges / Year" />
           <StatItem num="🛡️"  label="100% Kid-Safe" />
         </div>
@@ -155,9 +155,9 @@ export default function HomePage() {
               className="font-semibold"
               style={{ fontSize: 14, opacity: 0.85, marginBottom: 14, lineHeight: 1.6 }}
             >
-              🌿 <strong>Herb Science:</strong> Plant one herb seed, label it, and
-              write one sentence about what it needs to grow. Post your photo to
-              your showcase!
+              🏗️ <strong>Paper Tower:</strong> Using only sheets of paper (no tape or
+              glue!), build the tallest freestanding tower you can. Measure it and
+              post your photo to your showcase!
             </p>
             <Link href="/explore" className="ss-btn-gold">
               Accept Challenge →
@@ -197,8 +197,7 @@ export default function HomePage() {
           }}
         >
           <FeatureCard badge="Fun"     badgeBg="#dcfce7" badgeColor="#15803d" icon="🔍" title="Explore"      description="Curiosity hooks, mini challenges, and discovery. Find what lights you up and try things you've never tried before!" href="/explore" />
-          <FeatureCard badge="Learn"   badgeBg="#fef3c7" badgeColor="#d97706" icon="📚" title="Courses"      description="Project-based learning from Seedling to Harvest. Each course ends with something real you made or did!" href="/courses" />
-          <FeatureCard badge="Discover"badgeBg="#e0f2fe" badgeColor="#0369a1" icon="🚀" title="Careers"      description="See what real people do every day — the cool parts AND the hard parts. Save careers you love to your profile!" href="/careers" />
+<FeatureCard badge="Discover"badgeBg="#e0f2fe" badgeColor="#0369a1" icon="🚀" title="Careers"      description="See what real people do every day — the cool parts AND the hard parts. Save careers you love to your profile!" href="/careers" />
           <FeatureCard badge="Achieve" badgeBg="#fce7f3" badgeColor="#be185d" icon="🏆" title="Kid Profile"  description="Choose your username and avatar, earn badges, track streaks, and show off what you've learned!" href="/profile" />
           <FeatureCard badge="Monitor" badgeBg="#ede9fe" badgeColor="#7c3aed" icon="👨‍👩‍👧" title="Parent View" description="See what your child is learning, approve their showcase posts, and purchase courses — all in one place." href="/profile" />
           <FeatureCard badge="Safe"    badgeBg="#dcfce7" badgeColor="#15803d" icon="🛡️" title="Safety First" description="Predefined messages, parent approvals, no public profiles. Safety isn't a feature — it's our foundation." href="/safety" />

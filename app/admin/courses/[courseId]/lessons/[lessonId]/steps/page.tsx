@@ -824,6 +824,7 @@ export default function AdminLessonStepsPage() {
                 </div>
                 <div className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold shrink-0 ${cfg.color}`}>
                   {cfg.icon} {cfg.label}
+                  {step.type === "interactive" && <span className="ml-1 rounded bg-orange-200 px-1 py-0.5 text-[10px] font-black text-orange-800">DEPRECATED</span>}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-slate-800 truncate">{step.title || `${cfg.label} step`}</div>

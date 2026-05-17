@@ -40,18 +40,18 @@ const WS_WORDS = ["COOK", "CODE", "GROW", "ART", "MUSIC", "READ"];
 const WS_SIZE  = 8;
 
 const INTERESTS = [
-  { icon: "🍳", label: "Cooking",     sub: "Recipes & food science" },
-  { icon: "💻", label: "Coding",      sub: "Build apps & games" },
-  { icon: "🌱", label: "Gardening",   sub: "Grow your own food" },
-  { icon: "💰", label: "Investing",   sub: "Money & finance" },
-  { icon: "🎨", label: "Art & Design",sub: "Create & express" },
-  { icon: "🎵", label: "Music",       sub: "Instruments & theory" },
-  { icon: "📸", label: "Photography", sub: "Capture the world" },
-  { icon: "🔬", label: "Science",     sub: "Experiments & discovery" },
-  { icon: "🐾", label: "Animal Care", sub: "Pets & wildlife" },
-  { icon: "🏋️", label: "Fitness",     sub: "Health & movement" },
-  { icon: "✍️", label: "Writing",     sub: "Stories & journalism" },
-  { icon: "🛠️", label: "Building",    sub: "Woodwork & making" },
+  { icon: "🍳", label: "Cooking",     sub: "Recipes & food science",  slug: "cooking"     },
+  { icon: "💻", label: "Coding",      sub: "Build apps & games",      slug: "coding"      },
+  { icon: "🌱", label: "Gardening",   sub: "Grow your own food",      slug: "gardening"   },
+  { icon: "💰", label: "Investing",   sub: "Money & finance",         slug: "investing"   },
+  { icon: "🎨", label: "Art & Design",sub: "Create & express",        slug: "art"         },
+  { icon: "🎵", label: "Music",       sub: "Instruments & theory",    slug: "music"       },
+  { icon: "📸", label: "Photography", sub: "Capture the world",       slug: "photography" },
+  { icon: "🔬", label: "Science",     sub: "Experiments & discovery", slug: "science"     },
+  { icon: "🐾", label: "Animal Care", sub: "Pets & wildlife",         slug: "animal-care" },
+  { icon: "🏋️", label: "Fitness",     sub: "Health & movement",       slug: "fitness"     },
+  { icon: "✍️", label: "Writing",     sub: "Stories & journalism",    slug: "writing"     },
+  { icon: "🛠️", label: "Building",    sub: "Woodwork & making",       slug: "building"    },
 ];
 
 const CHALLENGE_LABELS: Record<ChallengeType, string> = {
@@ -123,17 +123,17 @@ function TabBtn({ active, done, onClick, children }: { active: boolean; done: bo
 // ── HANDS-ON CHALLENGE ────────────────────────────────────────
 function HandsOnChallenge({ onComplete, done }: { onComplete: () => void; done: boolean }) {
   const steps = [
-    "Gather a small pot, some soil, and one herb seed — basil, mint, or chives work great!",
-    "Plant your seed following the packet instructions, then water it gently.",
-    "Write one sentence about what your herb needs to grow — light, water, or warmth?",
-    "Take a photo and post it to your Showcase for your parent to approve!",
+    "Grab 5–10 sheets of paper from a recycling bin, printer, or notebook — no tape, scissors, or glue allowed!",
+    "Using only paper folds and rolls, build the tallest freestanding tower you can.",
+    "Measure your tower using your hand, a pencil, or a ruler, then write down how tall it is.",
+    "Take a photo of your tower and post it to your Showcase for your parent to approve!",
   ];
   const [checked, setChecked] = useState<boolean[]>(steps.map(() => false));
   const allDone = checked.every(Boolean);
 
   return (
     <div className="rounded-2xl border-2 border-amber-200 bg-amber-50 p-6">
-      <h3 className="font-display text-xl font-bold text-amber-800">🌿 Herb Science Challenge</h3>
+      <h3 className="font-display text-xl font-bold text-amber-800">🏗️ Paper Tower Challenge</h3>
       <p className="mt-1 text-sm font-semibold text-amber-700">Complete all steps to mark this challenge done!</p>
       {done && <div className="mt-3 rounded-xl bg-emerald-100 border border-emerald-300 px-4 py-2 text-sm font-bold text-emerald-700">✓ Completed today!</div>}
       <div className="mt-4 space-y-3">
@@ -569,7 +569,7 @@ export default function ExplorePage() {
         <p className="mt-1 text-sm font-semibold text-slate-500">Tap any topic to find courses and career paths!</p>
         <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
           {INTERESTS.map((item) => (
-            <Link key={item.label} href="/courses"
+            <Link key={item.label} href={`/careers?category=${item.slug}`}
               className="flex flex-col items-center rounded-2xl border-2 border-transparent bg-white p-5 text-center shadow-sm transition hover:-translate-y-1 hover:border-emerald-200 hover:shadow-md">
               <span className="text-4xl">{item.icon}</span>
               <span className="font-display mt-2 text-base font-bold text-emerald-900">{item.label}</span>

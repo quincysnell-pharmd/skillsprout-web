@@ -5,26 +5,34 @@ import { supabaseBrowser } from "@/app/lib/supabase/client";
 
 interface Props {
   childId: string;
-  courseId: string;
+  courseId?: string;
   lessonId?: string;
   category?: string;
+  initialType?: PostType;
   onClose: () => void;
   onSubmitted: () => void;
 }
 
-type PostType = "reflection" | "showcase" | "discovery";
+type PostType = "reflection" | "showcase" | "discovery" | "achievement";
 
 const TYPE_OPTIONS: { type: PostType; emoji: string; label: string; description: string; placeholder: string }[] = [
+  {
+    type: "achievement",
+    emoji: "🏆",
+    label: "Achievement",
+    description: "Share something you accomplished in real life — an award, a project, a goal you finished!",
+    placeholder: "I achieved... / I'm proud of... / Here's what I did and how I did it...",
+  },
   {
     type: "reflection",
     emoji: "📝",
     label: "Reflection",
-    description: "Write about what you learned in this unit",
-    placeholder: "What did I learn? What was surprising? What questions do I still have?",
+    description: "Write about something you learned — from a book, a video, a class, or real-life experience.",
+    placeholder: "What did I learn? What surprised me? What questions do I still have?",
   },
   {
     type: "showcase",
-    emoji: "🏆",
+    emoji: "🎨",
     label: "Showcase",
     description: "Share a project or something you created",
     placeholder: "Describe what you built or created, how you did it, and what you're proud of!",
@@ -38,9 +46,9 @@ const TYPE_OPTIONS: { type: PostType; emoji: string; label: string; description:
   },
 ];
 
-export function CommunityPostForm({ childId, courseId, lessonId, category, onClose, onSubmitted }: Props) {
+export function CommunityPostForm({ childId, courseId, lessonId, category, initialType, onClose, onSubmitted }: Props) {
   const supabase = supabaseBrowser();
-  const [type, setType]       = useState<PostType>("reflection");
+  const [type, setType]       = useState<PostType>(initialType ?? "achievement");
   const [title, setTitle]     = useState("");
   const [content, setContent] = useState("");
   const [images, setImages]   = useState<string[]>([]);
@@ -75,7 +83,7 @@ export function CommunityPostForm({ childId, courseId, lessonId, category, onClo
 
     const { error } = await supabase.from("community_posts").insert({
       child_id:       childId,
-      course_id:      courseId,
+      course_id:      courseId ?? null,
       lesson_id:      lessonId ?? null,
       type,
       title:          title.trim() || null,
@@ -106,7 +114,7 @@ export function CommunityPostForm({ childId, courseId, lessonId, category, onClo
 
         <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
           {/* Type selector */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {TYPE_OPTIONS.map((opt) => (
               <button key={opt.type} onClick={() => setType(opt.type)}
                 className={`flex flex-col items-center gap-1 rounded-2xl border-2 p-3 text-center transition ${

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
 import SetActiveChildOnLoad from "@/components/child/SetActiveChildOnLoad";
-import PortfolioPage from "@/components/portfolio/PortfolioPage";
+import { CommunityPostForm, PostSubmittedBanner } from "@/components/community/CommunityPostForm";
 
 // ── Types ─────────────────────────────────────────────────────
 interface ChildProfile {
@@ -23,13 +23,6 @@ interface Badge {
   name: string;
   icon: string;
   description: string;
-}
-
-interface Enrollment {
-  id: string;
-  course_id: string;
-  progress_pct: number;
-  courses: { title: string; category: string; level: string; emoji?: string };
 }
 
 // ── Avatar options ────────────────────────────────────────────
@@ -109,7 +102,168 @@ function AvatarPicker({ current, onSelect, onClose }: { current: string; onSelec
   );
 }
 
+// ── Profile Tab ───────────────────────────────────────────────
+function ProfileTab({ child, badges }: { child: ChildProfile; badges: Badge[] }) {
+  const supabase = supabaseBrowser();
+  const [posts, setPosts] = useState<{ id: string; type: string; title: string | null; content: string; created_at: string }[]>([]);
+  const [loadingPosts, setLoadingPosts] = useState(true);
+
+  const level      = getLevel(child.xp);
+  const nextLevel  = getNextLevel(child.xp);
+  const xpProgress = Math.min(100, Math.round(((child.xp - level.min) / (nextLevel.max - level.min)) * 100));
+  const avatar     = child.avatar_url || "🌱";
+  const firstName  = (child.display_name || child.username).split(" ")[0];
+  const LOCKED_COUNT = 4;
+
+  useEffect(() => {
+    supabase
+      .from("community_posts")
+      .select("id, type, title, content, created_at")
+      .eq("child_id", child.id)
+      .eq("status", "approved")
+      .in("type", ["achievement", "reflection"])
+      .order("created_at", { ascending: false })
+      .then(({ data }) => { setPosts(data ?? []); setLoadingPosts(false); });
+  }, [child.id]);
+
+  const typeLabel = (type: string) =>
+    type === "achievement" ? "🏆 Achievement" : "📝 Reflection";
+
+  return (
+    <div className="space-y-4">
+
+      {/* ── Header ── */}
+      <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm text-center">
+        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl border-2 border-emerald-100 bg-emerald-50 text-5xl">
+          {avatar}
+        </div>
+        <h2 className="font-display mt-3 text-xl font-black text-slate-900">{firstName}</h2>
+        <div className="mt-1 flex items-center justify-center gap-1.5">
+          <span className="text-lg">{level.emoji}</span>
+          <span className="text-sm font-bold text-slate-500">{level.label}</span>
+        </div>
+        <div className="mx-auto mt-4 max-w-xs">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400">{child.xp} pts</span>
+            <span className="text-xs font-bold text-slate-400">Next: {nextLevel.label} ({nextLevel.max} pts)</span>
+          </div>
+          <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-full rounded-full bg-emerald-400 transition-all duration-700" style={{ width: `${xpProgress}%` }} />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Badge shelf ── */}
+      <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+        <h3 className="font-display mb-4 text-base font-bold text-slate-900">🏅 Badges Earned</h3>
+        {badges.length === 0 ? (
+          <div className="py-8 text-center">
+            <div className="mb-2 text-4xl">🎯</div>
+            <p className="text-sm font-semibold text-slate-400">No badges yet — keep going!</p>
+            <p className="mt-1 text-xs font-semibold text-slate-400">Complete challenges and share achievements to earn your first badge.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-4 gap-3">
+            {badges.map((b) => (
+              <div key={b.id} className="flex flex-col items-center gap-1.5 rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-white p-3 text-center shadow-sm">
+                <span className="text-3xl">{b.icon}</span>
+                <span className="text-xs font-bold leading-tight text-slate-700">{b.name}</span>
+              </div>
+            ))}
+            {Array.from({ length: LOCKED_COUNT }).map((_, i) => (
+              <div key={`locked-${i}`} className="relative flex flex-col items-center gap-1.5 rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center opacity-40">
+                <span className="text-3xl">🏅</span>
+                <span className="text-xs font-bold leading-tight text-slate-400">???</span>
+                <div className="absolute inset-0 flex items-center justify-center rounded-2xl">
+                  <span className="text-base">🔒</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Achievement feed ── */}
+      <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+        <h3 className="font-display mb-4 text-base font-bold text-slate-900">✨ Achievements & Reflections</h3>
+        {loadingPosts ? (
+          <div className="flex justify-center py-8"><div className="text-2xl animate-bounce">🌱</div></div>
+        ) : posts.length === 0 ? (
+          <div className="py-8 text-center">
+            <div className="mb-2 text-4xl">🌱</div>
+            <p className="text-sm font-semibold text-slate-400">Nothing shared yet!</p>
+            <p className="mt-1 text-xs font-semibold text-slate-400">Share an achievement or reflection from your Home tab — approved posts appear here.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {posts.map((post) => (
+              <div key={post.id} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="rounded-lg border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">
+                    {typeLabel(post.type)}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-400">
+                    {new Date(post.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </span>
+                </div>
+                {post.title && <p className="mb-1 text-sm font-bold text-slate-800">{post.title}</p>}
+                <p className="text-sm font-semibold leading-relaxed text-slate-600">{post.content}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+    </div>
+  );
+}
+
 // ── MAIN PAGE ─────────────────────────────────────────────────
+// ── Journal Tab ───────────────────────────────────────────────
+function JournalTab({ childId }: { childId: string }) {
+  const supabase = supabaseBrowser();
+  const [entries, setEntries] = useState<{ id: string; prompt: string; response: string; created_at: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.from("journal_entries")
+      .select("id, prompt, response, created_at")
+      .eq("child_id", childId)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => { setEntries(data ?? []); setLoading(false); });
+  }, [childId]);
+
+  if (loading) return <div className="flex justify-center py-16"><div className="text-3xl animate-bounce">✏️</div></div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-4 flex items-center gap-3">
+        <span className="text-2xl">🔒</span>
+        <p className="text-sm font-bold text-yellow-800">Your journal is private — only you can see these entries.</p>
+      </div>
+      {entries.length === 0 ? (
+        <div className="rounded-2xl border border-slate-100 bg-white p-12 text-center">
+          <div className="text-5xl mb-3">✏️</div>
+          <p className="font-bold text-slate-400">No journal entries yet!</p>
+          <p className="text-sm font-semibold text-slate-400 mt-1">Complete journal steps in your lessons to see them here.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {entries.map(entry => (
+            <div key={entry.id} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+              <div className="text-xs font-bold text-slate-400 mb-2">
+                {new Date(entry.created_at).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+              </div>
+              {entry.prompt && <p className="text-sm font-black text-slate-700 mb-2">✏️ {entry.prompt}</p>}
+              <p className="text-sm font-semibold text-slate-600 leading-relaxed whitespace-pre-wrap">{entry.response}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ChildDashboard() {
   const params   = useParams();
   const router   = useRouter();
@@ -118,13 +272,15 @@ export default function ChildDashboard() {
 
   const [child, setChild]             = useState<ChildProfile | null>(null);
   const [badges, setBadges]           = useState<Badge[]>([]);
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [loading, setLoading]         = useState(true);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput]     = useState("");
   const [savingName, setSavingName]   = useState(false);
-  const [activeTab, setActiveTab]     = useState<"home" | "courses" | "badges" | "portfolio" | "friends">("home");
+  const [activeTab, setActiveTab]     = useState<"home" | "badges" | "profile" | "friends" | "journal">("home");
+  const [showPostForm, setShowPostForm]   = useState(false);
+  const [postFormType, setPostFormType]   = useState<"achievement" | "reflection">("achievement");
+  const [postSubmitted, setPostSubmitted] = useState(false);
 
   useEffect(() => { if (childId) loadData(); }, [childId]);
 
@@ -145,11 +301,6 @@ export default function ChildDashboard() {
       .from("child_badges").select("badges(id, name, icon, description)").eq("child_id", childId);
     setBadges((badgeData ?? []).map((b: Record<string, unknown>) => b.badges as Badge).filter(Boolean));
 
-    const { data: enrollData, error: enrollError } = await supabase
-      .from("enrollments").select("id, course_id, progress_pct, courses(title, category, level, emoji)")
-      .eq("child_id", childId).order("id", { ascending: false });
-    console.log("Enrollments:", enrollData, "Error:", enrollError);
-    setEnrollments((enrollData as unknown as Enrollment[]) ?? []);
     setLoading(false);
   }
 
@@ -191,6 +342,21 @@ export default function ChildDashboard() {
       <SetActiveChildOnLoad childId={childId} />
       {showAvatarPicker && (
         <AvatarPicker current={avatar} onSelect={handleAvatarSelect} onClose={() => setShowAvatarPicker(false)} />
+      )}
+      {showPostForm && !postSubmitted && (
+        <CommunityPostForm
+          childId={childId}
+          initialType={postFormType}
+          onClose={() => setShowPostForm(false)}
+          onSubmitted={() => setPostSubmitted(true)}
+        />
+      )}
+      {showPostForm && postSubmitted && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-sm">
+            <PostSubmittedBanner onClose={() => { setShowPostForm(false); setPostSubmitted(false); }} />
+          </div>
+        </div>
       )}
 
       <div className="max-w-2xl mx-auto space-y-4 py-6 px-4">
@@ -256,10 +422,10 @@ export default function ChildDashboard() {
         <div className="grid grid-cols-5 gap-1 rounded-2xl bg-slate-100 p-1">
           {([
             { key: "home",      label: "Home",      icon: "🏠" },
-            { key: "courses",   label: "Courses",   icon: "📚" },
             { key: "badges",    label: "Badges",    icon: "🏅" },
-            { key: "portfolio", label: "Portfolio", icon: "📈" },
+            { key: "profile",   label: "Profile",   icon: "🌟" },
             { key: "friends",   label: "Friends",   icon: "👯" },
+            { key: "journal",   label: "Journal",   icon: "✏️" },
           ] as const).map(({ key, label, icon }) => (
             <button key={key} onClick={() => setActiveTab(key)}
               className={`rounded-xl py-2 text-xs font-bold transition-all ${
@@ -276,10 +442,9 @@ export default function ChildDashboard() {
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
               {[
-
-                { href: "/courses",   icon: "📚", label: "Courses",         color: "from-emerald-50 to-teal-50 border-emerald-100 hover:border-emerald-300" },
+                { href: "/explore",    icon: "🌎", label: "Explore",          color: "from-emerald-50 to-teal-50 border-emerald-100 hover:border-emerald-300" },
                 { href: "/challenges", icon: "⚡", label: "Daily Challenges", color: "from-violet-50 to-indigo-50 border-violet-100 hover:border-violet-300" },
-                { href: "/futures",   icon: "🚀", label: "Futures",         color: "from-sky-50 to-indigo-50 border-sky-100 hover:border-sky-300"           },
+                { href: "/careers",    icon: "🚀", label: "Futures",          color: "from-sky-50 to-indigo-50 border-sky-100 hover:border-sky-300"           },
               ].map(({ href, icon, label, color }) => (
                 <a key={href} href={href}
                   className={`flex flex-col items-center gap-2 rounded-2xl border bg-gradient-to-br p-4 text-center transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 ${color}`}>
@@ -289,56 +454,47 @@ export default function ChildDashboard() {
               ))}
             </div>
 
-            <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-display text-lg font-bold text-slate-900">📚 My Courses</h2>
-                <button onClick={() => setActiveTab("courses")} className="text-xs font-bold text-emerald-600 hover:text-emerald-800">See all →</button>
-              </div>
-              {enrollments.length === 0 ? (
-                <div className="text-center py-6">
-                  <div className="text-4xl mb-2">📖</div>
-                  <p className="text-sm font-semibold text-slate-400">No courses started yet!</p>
-                  <a href="/courses" className="mt-2 inline-block rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 transition">Browse courses →</a>
+            {/* ── SHARE BUTTONS ── */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => { setPostFormType("achievement"); setPostSubmitted(false); setShowPostForm(true); }}
+                className="flex items-center gap-3 rounded-2xl border-2 border-amber-200 bg-amber-50 p-4 text-left transition hover:border-amber-400 hover:bg-amber-100 hover:shadow-md">
+                <span className="text-2xl shrink-0">🏆</span>
+                <div>
+                  <div className="text-sm font-bold text-amber-900">Share an Achievement</div>
+                  <div className="text-xs font-semibold text-amber-700">Something you accomplished!</div>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {enrollments.slice(0, 3).map((e) => (
-                    <a key={e.id} href={`/courses/${e.course_id}`}
-                      className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 hover:border-emerald-200 hover:bg-emerald-50 transition group">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white border border-slate-200 text-xl shadow-sm">
-                        {e.courses.emoji ?? "📚"}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-bold text-slate-800 truncate">{e.courses.title}</div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <div className="flex-1 h-1.5 rounded-full bg-slate-200 overflow-hidden">
-                            <div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${e.progress_pct}%` }} />
-                          </div>
-                          <span className="text-xs font-black text-emerald-600 shrink-0">{e.progress_pct}%</span>
-                        </div>
-                      </div>
-                      <span className="text-xs font-bold text-emerald-600 group-hover:text-emerald-800 shrink-0">
-                        {e.progress_pct > 0 ? "Continue →" : "Start →"}
-                      </span>
-                    </a>
-                  ))}
+              </button>
+              <button
+                onClick={() => { setPostFormType("reflection"); setPostSubmitted(false); setShowPostForm(true); }}
+                className="flex items-center gap-3 rounded-2xl border-2 border-violet-200 bg-violet-50 p-4 text-left transition hover:border-violet-400 hover:bg-violet-100 hover:shadow-md">
+                <span className="text-2xl shrink-0">📝</span>
+                <div>
+                  <div className="text-sm font-bold text-violet-900">Write a Reflection</div>
+                  <div className="text-xs font-semibold text-violet-700">A book or resource you finished!</div>
                 </div>
-              )}
+              </button>
             </div>
 
-            {/* Portfolio preview on home tab */}
+            {/* My Progress home card */}
             <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="font-display text-lg font-bold text-slate-900">📈 My Portfolio</h2>
-                <button onClick={() => setActiveTab("portfolio")} className="text-xs font-bold text-emerald-600 hover:text-emerald-800">See all →</button>
+                <h2 className="font-display text-lg font-bold text-slate-900">🌟 My Progress</h2>
+                <button onClick={() => setActiveTab("profile")} className="text-xs font-bold text-emerald-600 hover:text-emerald-800">View profile →</button>
               </div>
-              <div className="rounded-xl border-2 border-dashed border-emerald-200 bg-emerald-50 p-4 text-center">
-                <p className="text-sm font-semibold text-emerald-700">Track your practice investments!</p>
-                <button onClick={() => setActiveTab("portfolio")}
-                  className="mt-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 transition">
-                  Open Portfolio →
-                </button>
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-3xl">{level.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-bold text-slate-800">{level.label}</span>
+                    <span className="text-xs font-bold text-slate-400">{child.xp} pts</span>
+                  </div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-full rounded-full bg-emerald-400 transition-all duration-700" style={{ width: `${xpProgress}%` }} />
+                  </div>
+                </div>
               </div>
+              <p className="text-xs font-semibold text-slate-400">Next level: <span className="font-bold text-slate-600">{nextLevel.label} {nextLevel.emoji}</span> at {nextLevel.max} pts</p>
             </div>
 
             {badges.length > 0 && (
@@ -360,38 +516,9 @@ export default function ChildDashboard() {
           </div>
         )}
 
-        {/* ── COURSES TAB ── */}
-        {activeTab === "courses" && (
-          <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-            <h2 className="font-display text-lg font-bold text-slate-900 mb-4">📚 All My Courses</h2>
-            {enrollments.length === 0 ? (
-              <div className="text-center py-10">
-                <div className="text-5xl mb-3">📖</div>
-                <p className="text-sm font-semibold text-slate-400">You haven't started any courses yet!</p>
-                <a href="/courses" className="mt-3 inline-block rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition">Browse Courses →</a>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {enrollments.map((e) => (
-                  <div key={e.id} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white border border-slate-200 text-2xl shadow-sm">
-                      {e.courses.emoji ?? "📚"}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-slate-800 truncate">{e.courses.title}</div>
-                      <div className="text-xs font-semibold text-slate-400 capitalize mt-0.5">{e.courses.category} · {e.courses.level}</div>
-                      <div className="flex items-center gap-2 mt-2">
-                        <div className="flex-1 h-2 rounded-full bg-slate-200 overflow-hidden">
-                          <div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${e.progress_pct}%` }} />
-                        </div>
-                        <span className="text-sm font-black text-emerald-600 shrink-0">{e.progress_pct}%</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+        {/* ── JOURNAL TAB ── */}
+        {activeTab === "journal" && (
+          <JournalTab childId={child.id} />
         )}
 
         {/* ── BADGES TAB ── */}
@@ -402,7 +529,7 @@ export default function ChildDashboard() {
               <div className="text-center py-10">
                 <div className="text-5xl mb-3">🎯</div>
                 <p className="text-sm font-semibold text-slate-400">No badges yet — keep learning!</p>
-                <p className="text-xs font-semibold text-slate-400 mt-1">Complete challenges and finish courses to earn them.</p>
+                <p className="text-xs font-semibold text-slate-400 mt-1">Complete challenges and share achievements to earn them.</p>
               </div>
             ) : (
               <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
@@ -418,43 +545,25 @@ export default function ChildDashboard() {
           </div>
         )}
 
-        {/* ── PORTFOLIO TAB ── */}
-        {activeTab === "portfolio" && (
-          <PortfolioPage childId={childId} />
+        {/* ── PROFILE TAB ── */}
+        {activeTab === "profile" && (
+          <ProfileTab child={child} badges={badges} />
         )}
 
         {/* ── FRIENDS TAB ── */}
         {activeTab === "friends" && (
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-              <h2 className="font-display text-lg font-bold text-slate-900 mb-1">👯 Friends</h2>
-              <p className="text-xs font-semibold text-slate-400 mb-5">Add friends and cheer each other on!</p>
-              <div className="rounded-xl border-2 border-dashed border-emerald-200 bg-emerald-50 p-4 text-center mb-4">
-                <div className="text-3xl mb-2">🔍</div>
-                <p className="text-sm font-bold text-emerald-800">Find a friend by username</p>
-                <p className="text-xs font-semibold text-emerald-600 mt-0.5 mb-3">Coming soon — friends launching shortly!</p>
-                <div className="flex gap-2 max-w-xs mx-auto">
-                  <input placeholder="Enter their username…" disabled
-                    className="flex-1 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-slate-400 outline-none opacity-60" />
-                  <button disabled className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white opacity-50">Add</button>
-                </div>
-              </div>
-              <div className="text-center py-8">
-                <div className="text-5xl mb-3">🌱</div>
-                <p className="text-sm font-semibold text-slate-400">No friends yet.</p>
-                <p className="text-xs font-semibold text-slate-400 mt-1">When you add friends, you'll see their streaks and progress here!</p>
-              </div>
+          <div className="rounded-2xl border border-slate-100 bg-white p-8 shadow-sm text-center">
+            <div className="text-6xl mb-4">👯</div>
+            <h2 className="font-display text-xl font-black text-slate-900 mb-2">Friends — coming soon!</h2>
+            <p className="text-sm font-semibold text-slate-500 max-w-xs mx-auto leading-relaxed">
+              Soon you'll be able to cheer on friends, share streaks, and send encouraging messages. Stay tuned!
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
+              {["🔥 You're on fire!", "⭐ Amazing work!", "💪 Keep going!", "🎉 Congrats!"].map((msg) => (
+                <span key={msg} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-400">{msg}</span>
+              ))}
             </div>
-            <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-              <h2 className="font-display text-base font-bold text-slate-900 mb-3">💬 Quick Messages</h2>
-              <p className="text-xs font-semibold text-slate-400 mb-3">Send a friend one of these encouraging messages!</p>
-              <div className="flex flex-wrap gap-2">
-                {["🔥 You're on fire!", "⭐ Amazing work!", "💪 Keep going!", "🎉 Congrats!", "🌱 You're growing!", "🏆 You're a legend!"].map((msg) => (
-                  <button key={msg} disabled className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-500 opacity-60 cursor-not-allowed">{msg}</button>
-                ))}
-              </div>
-              <p className="mt-3 text-xs font-semibold text-emerald-600">🔒 Unlocks when friends are added!</p>
-            </div>
+            <p className="mt-4 text-xs font-semibold text-emerald-600">🌱 This feature is growing!</p>
           </div>
         )}
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
 
 interface Career {
@@ -19,9 +20,25 @@ interface Career {
   cons: string[];
   required_skills: string[];
   course_ids: string[];
+  category?: string;
   is_published: boolean;
   order_index: number;
 }
+
+const CATEGORY_LABELS: Record<string, { icon: string; label: string }> = {
+  cooking:     { icon: "🍳", label: "Cooking"     },
+  coding:      { icon: "💻", label: "Coding"      },
+  gardening:   { icon: "🌱", label: "Gardening"   },
+  investing:   { icon: "💰", label: "Investing"   },
+  art:         { icon: "🎨", label: "Art & Design" },
+  music:       { icon: "🎵", label: "Music"       },
+  photography: { icon: "📸", label: "Photography" },
+  science:     { icon: "🔬", label: "Science"     },
+  "animal-care": { icon: "🐾", label: "Animal Care" },
+  fitness:     { icon: "🏋️", label: "Fitness"     },
+  writing:     { icon: "✍️", label: "Writing"     },
+  building:    { icon: "🛠️", label: "Building"    },
+};
 
 interface Course {
   id: string;
@@ -210,7 +227,11 @@ function CareerDetail({ career, saved, onSave, onBack, courses }: {
 
 // ── Main Page ──────────────────────────────────────────────────
 export default function CareersPage() {
-  const supabase = supabaseBrowser();
+  const supabase    = supabaseBrowser();
+  const searchParams = useSearchParams();
+  const categoryParam = searchParams.get("category") ?? null;
+  const categoryMeta  = categoryParam ? (CATEGORY_LABELS[categoryParam] ?? { icon: "🔍", label: categoryParam.charAt(0).toUpperCase() + categoryParam.slice(1) }) : null;
+
   const [careers, setCareers]   = useState<Career[]>([]);
   const [courses, setCourses]   = useState<Course[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -228,7 +249,6 @@ export default function CareersPage() {
     setCareers((careerData as Career[]) ?? []);
     setCourses((courseData as Course[]) ?? []);
 
-    // Load saved careers from localStorage
     try {
       const s = JSON.parse(localStorage.getItem("saved_careers") ?? "[]");
       setSaved(new Set(s));
@@ -246,6 +266,10 @@ export default function CareersPage() {
       return next;
     });
   }
+
+  const filteredCareers = categoryParam
+    ? careers.filter(c => c.category?.toLowerCase() === categoryParam.toLowerCase())
+    : careers;
 
   if (selected) {
     return (
@@ -265,27 +289,46 @@ export default function CareersPage() {
       <section className="relative overflow-hidden rounded-3xl border border-emerald-100 bg-white p-8 shadow-sm">
         <div className="pointer-events-none absolute -right-16 -top-16 h-52 w-52 rounded-full bg-sky-100/50 blur-3xl" />
         <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800">🚀 Discover real careers</span>
-        <h1 className="font-display mt-4 text-4xl font-bold text-emerald-900 md:text-5xl">Careers</h1>
+        <h1 className="font-display mt-4 text-4xl font-bold text-emerald-900 md:text-5xl">
+          {categoryMeta ? `${categoryMeta.icon} ${categoryMeta.label} Careers` : "Futures"}
+        </h1>
         <p className="mt-2 max-w-xl text-base font-semibold text-slate-500">
-          See what real people do every day — the exciting parts AND the hard parts. Save the ones you love to your profile!
+          {categoryMeta
+            ? `Explore careers in ${categoryMeta.label} — see what people actually do and what skills you'll need!`
+            : "See what real people do every day — the exciting parts AND the hard parts. Save the ones you love to your profile!"}
         </p>
-        <div className="mt-4 inline-flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-2.5 text-sm">
-          <span className="font-bold text-slate-800">Saved:</span>
-          <span className="font-bold text-emerald-700">{saved.size} career{saved.size !== 1 ? "s" : ""}</span>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="inline-flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-2.5 text-sm">
+            <span className="font-bold text-slate-800">Saved:</span>
+            <span className="font-bold text-emerald-700">{saved.size} future{saved.size !== 1 ? "s" : ""}</span>
+          </div>
+          {categoryMeta && (
+            <Link href="/careers"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
+              ← All Careers
+            </Link>
+          )}
         </div>
       </section>
 
       {/* Career grid */}
       {loading ? (
         <div className="flex justify-center py-16"><div className="text-4xl animate-bounce">💼</div></div>
-      ) : careers.length === 0 ? (
+      ) : filteredCareers.length === 0 ? (
         <div className="rounded-2xl border border-slate-100 bg-white p-12 text-center">
-          <div className="text-5xl mb-3">💼</div>
-          <p className="font-bold text-slate-400">No careers added yet — check back soon!</p>
+          <div className="text-5xl mb-3">{categoryMeta ? categoryMeta.icon : "💼"}</div>
+          <p className="font-bold text-slate-600">
+            {categoryMeta ? `More ${categoryMeta.label} careers coming soon! 🌱` : "No careers added yet — check back soon!"}
+          </p>
+          {categoryMeta && (
+            <Link href="/careers" className="mt-4 inline-block rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50 transition">
+              ← Browse all careers
+            </Link>
+          )}
         </div>
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {careers.map(career => (
+          {filteredCareers.map(career => (
             <CareerCard
               key={career.id}
               career={career}

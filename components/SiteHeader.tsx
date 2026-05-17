@@ -11,7 +11,6 @@ const ADMIN_LINK = { href: "/admin", label: "Admin" };
 
 const PUBLIC_LINKS = [
   { href: "/explore",  label: "Explore"  },
-  { href: "/courses",  label: "Courses"  },
   { href: "/careers",  label: "Futures"  },
   { href: "/about",    label: "About Us" },
 ];

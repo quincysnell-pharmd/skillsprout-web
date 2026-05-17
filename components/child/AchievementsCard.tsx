@@ -1,7 +1,6 @@
 export default function AchievementsCard(props: {
   achievements: {
     modulesCompleted: number;
-    coursesCompleted: number;
     finalProjectStatus: "In Progress" | "Submitted" | "Approved";
     streakDays: number;
   };
@@ -21,7 +20,6 @@ export default function AchievementsCard(props: {
 
       <div className="mt-4 grid grid-cols-2 gap-4">
         <Stat label="Modules completed" value={achievements.modulesCompleted} />
-        <Stat label="Courses completed" value={achievements.coursesCompleted} />
         <Stat label="Streak" value={`${achievements.streakDays} days`} />
 
         <div className="rounded-xl border border-slate-200 p-4">
