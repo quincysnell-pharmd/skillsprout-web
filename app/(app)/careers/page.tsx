@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
@@ -225,8 +225,16 @@ function CareerDetail({ career, saved, onSave, onBack, courses }: {
   );
 }
 
-// ── Main Page ──────────────────────────────────────────────────
 export default function CareersPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center py-16"><div className="text-4xl animate-bounce">💼</div></div>}>
+      <CareersInner />
+    </Suspense>
+  );
+}
+
+// ── Main Page ──────────────────────────────────────────────────
+function CareersInner() {
   const supabase    = supabaseBrowser();
   const searchParams = useSearchParams();
   const categoryParam = searchParams.get("category") ?? null;
