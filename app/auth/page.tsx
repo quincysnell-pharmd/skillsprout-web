@@ -161,6 +161,10 @@ function AuthPageInner() {
       .select("id").single();
       if (childError) throw childError;
 
+      if (childRow) {
+        await supabase.rpc("initialize_user_stats", { p_child_id: childRow.id });
+      }
+
       if (linkedParentId && cleanedInvite) {
         await supabase.from("link_codes").update({ used_at: new Date().toISOString() }).eq("code", cleanedInvite);
       }

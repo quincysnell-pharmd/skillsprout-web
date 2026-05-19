@@ -5,7 +5,7 @@ import { supabaseBrowser } from "@/app/lib/supabase/client";
 
 interface Post {
   id: string;
-  type: "reflection" | "showcase" | "discovery";
+  type: "achievement" | "reflection" | "showcase" | "discovery";
   title?: string;
   content: string;
   images?: string[];
@@ -19,9 +19,10 @@ interface Post {
 }
 
 const TYPE_CONFIG = {
-  reflection: { label: "Reflection", emoji: "📝" },
-  showcase:   { label: "Showcase",   emoji: "🏆" },
-  discovery:  { label: "Discovery",  emoji: "💡" },
+  achievement: { label: "Achievement", emoji: "🏅" },
+  reflection:  { label: "Reflection",  emoji: "📝" },
+  showcase:    { label: "Showcase",    emoji: "🏆" },
+  discovery:   { label: "Discovery",   emoji: "💡" },
 };
 
 export default function ParentPostApprovals() {
@@ -60,17 +61,40 @@ export default function ParentPostApprovals() {
 
   async function approve(postId: string) {
     setBusy(postId);
-    await supabase.from("community_posts")
-      .update({ parent_approved: true })
-      .eq("id", postId);
+    const localPost = posts.find((p) => p.id === postId);
+    await supabase.from("community_posts").update({ parent_approved: true }).eq("id", postId);
 
-    // Check if admin also approved — if so, set status to approved
+    // Check if admin also approved — if so, set status to approved and award points
     const { data: post } = await supabase
-      .from("community_posts").select("admin_approved").eq("id", postId).maybeSingle();
+      .from("community_posts")
+      .select("admin_approved, child_id, type")
+      .eq("id", postId)
+      .maybeSingle();
+
     if (post?.admin_approved === true) {
       await supabase.from("community_posts")
         .update({ status: "approved", approved_at: new Date().toISOString() })
         .eq("id", postId);
+
+      const childId = post.child_id as string;
+      const postType = (localPost?.type ?? post.type) as string;
+
+      // Increment posts_published counter
+      const { data: statsRow } = await supabase
+        .from("user_stats").select("posts_published").eq("child_id", childId).maybeSingle();
+      await supabase.from("user_stats")
+        .update({ posts_published: (statsRow?.posts_published ?? 0) + 1 })
+        .eq("child_id", childId);
+
+      // Award XP based on post type
+      if (postType === "reflection") {
+        await supabase.rpc("award_points", { p_child_id: childId, p_action: "reflection_published" });
+      } else if (postType === "achievement") {
+        await supabase.rpc("award_points", { p_child_id: childId, p_action: "achievement_published" });
+      }
+
+      const { data: newBadgeIds } = await supabase.rpc("check_badges", { p_child_id: childId });
+      console.log("New badges earned:", newBadgeIds);
     }
 
     setPosts((prev) => prev.filter((p) => p.id !== postId));

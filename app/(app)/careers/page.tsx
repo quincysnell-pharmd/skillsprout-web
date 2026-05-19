@@ -2,8 +2,9 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
+import BadgeCelebration from "@/components/BadgeCelebration";
 
 interface Career {
   id: string;
@@ -118,6 +119,37 @@ function CareerCard({ career, saved, onSave, onOpen }: {
 function CareerDetail({ career, saved, onSave, onBack, courses }: {
   career: Career; saved: boolean; onSave: () => void; onBack: () => void; courses: Course[];
 }) {
+  const supabase = supabaseBrowser();
+  const [newBadgeIds, setNewBadgeIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+
+    async function setup() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: childRow } = await supabase
+        .from("child_profiles").select("id").eq("user_id", user.id).maybeSingle();
+      if (!childRow) return;
+      const childId = childRow.id;
+
+      timer = setTimeout(async () => {
+        const { data: statsRow } = await supabase
+          .from("user_stats").select("careers_explored").eq("child_id", childId).maybeSingle();
+        await supabase.from("user_stats")
+          .update({ careers_explored: (statsRow?.careers_explored ?? 0) + 1 })
+          .eq("child_id", childId);
+        await supabase.rpc("award_points", { p_child_id: childId, p_action: "career_explored" });
+        const { data: earnedIds } = await supabase.rpc("check_badges", { p_child_id: childId });
+        if (earnedIds?.length) setNewBadgeIds(earnedIds);
+        console.log("Timer fired, earnedIds:", earnedIds, "newBadgeIds state will be:", earnedIds?.length ? earnedIds : "empty");
+      }, 5000);
+    }
+
+    setup();
+    return () => clearTimeout(timer);
+  }, [career.id]);
+
   const outlook = OUTLOOK_CONFIG[career.outlook] ?? OUTLOOK_CONFIG.stable;
   const avgSalary = career.salary_avg || Math.round((career.salary_min + career.salary_max) / 2);
   const linkedCourses = courses.filter(c => career.course_ids?.includes(c.id));
@@ -221,6 +253,7 @@ function CareerDetail({ career, saved, onSave, onBack, courses }: {
           </div>
         </div>
       )}
+      <BadgeCelebration badgeIds={newBadgeIds} onComplete={() => setNewBadgeIds([])} />
     </div>
   );
 }

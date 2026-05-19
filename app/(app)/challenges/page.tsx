@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
+import BadgeCelebration from "@/components/BadgeCelebration";
 
 type ChallengeType = "quiz" | "reflection" | "action" | "video" | "unscramble" | "fill_blank" | "word_search" | "hidden_object" | "sudoku" | "memory_match" | "sort_rank";
 
@@ -764,6 +765,7 @@ export default function DailyChallengesPage() {
   const [totalXP, setTotalXP]         = useState(0);
   const [xpGained, setXpGained]       = useState(0);
   const [showXP, setShowXP]           = useState(false);
+  const [newBadgeIds, setNewBadgeIds] = useState<string[]>([]);
 
   const today = new Date().toLocaleDateString("en-CA"); // en-CA gives YYYY-MM-DD in local time
 
@@ -788,12 +790,51 @@ export default function DailyChallengesPage() {
 
   async function handleComplete(challengeId: string, xp: number) {
     setCompletions(prev => new Set([...prev, challengeId]));
-    const newXP = totalXP + xp;
-    setTotalXP(newXP);
     setXpGained(xp);
     setShowXP(true);
     setTimeout(() => setShowXP(false), 3000);
-    if (childId) await supabase.from("child_profiles").update({ xp: newXP }).eq("id", childId);
+    if (!childId) return;
+
+    // 48h streak rule: fetch current stats first
+    const { data: stats } = await supabase
+      .from("user_stats")
+      .select("current_streak, last_challenge_date, challenges_completed")
+      .eq("child_id", childId)
+      .maybeSingle();
+
+    const lastDate = stats?.last_challenge_date as string | null;
+    let newStreak = stats?.current_streak ?? 0;
+    let streakIncremented = false;
+
+    if (lastDate && lastDate === today) {
+      // same day — no streak change
+    } else if (lastDate) {
+      const hoursSince = (Date.now() - new Date(lastDate + "T00:00:00").getTime()) / 36e5;
+      if (hoursSince <= 48) { newStreak += 1; streakIncremented = true; }
+      else { newStreak = 1; }
+    } else {
+      newStreak = 1;
+      streakIncremented = true;
+    }
+
+    await supabase.from("user_stats").update({
+      current_streak: newStreak,
+      last_challenge_date: today,
+      challenges_completed: (stats?.challenges_completed ?? 0) + 1,
+    }).eq("child_id", childId);
+
+    await supabase.rpc("award_points", { p_child_id: childId, p_action: "challenge_completed" });
+    if (streakIncremented) {
+      await supabase.rpc("award_points", { p_child_id: childId, p_action: "streak_bonus" });
+    }
+
+    const { data: earnedIds } = await supabase.rpc("check_badges", { p_child_id: childId });
+    if (earnedIds?.length) setNewBadgeIds(earnedIds);
+
+    // Sync XP from DB since award_points handles the update
+    const { data: updated } = await supabase
+      .from("child_profiles").select("xp").eq("id", childId).maybeSingle();
+    if (updated) setTotalXP(updated.xp ?? 0);
   }
 
   const completedCount = challenges.filter(c => completions.has(c.id)).length;
@@ -853,6 +894,7 @@ export default function DailyChallengesPage() {
       <button onClick={() => router.back()} className="w-full rounded-2xl border-2 border-slate-200 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 transition">
         ← Back to Dashboard
       </button>
+      <BadgeCelebration badgeIds={newBadgeIds} onComplete={() => setNewBadgeIds([])} />
     </div>
   );
 }
